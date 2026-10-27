@@ -53,6 +53,7 @@ npm run dev        # http://localhost:5173 (also printed with your LAN address)
 npm test           # unit + gameplay simulation tests
 npm run build      # type-check + production build into dist/ (with service worker)
 npm run preview    # serve the production build on http://localhost:4173
+npm run ipad       # build + serve over trusted HTTPS on the Wi-Fi (see "Installing on an iPad")
 ```
 
 Useful URL options: `?debug` (FPS, draw calls, position), `?quality=high|medium|low`
@@ -60,20 +61,79 @@ Useful URL options: `?debug` (FPS, draw calls, position), `?quality=high|medium|
 
 ## Installing on an iPad (offline PWA)
 
-Service workers (offline mode) only work on **HTTPS** with a trusted certificate (or on
-`localhost` on the same device), so the simplest route is to host the static `dist/` folder:
+Safari only enables offline mode (service workers) on a **trusted HTTPS** address. The game is
+served from this Mac over the home Wi-Fi with its own small certificate authority (CA), which
+you trust once on the iPad. Nothing is uploaded to the internet.
 
-1. `npm run build`
-2. Upload `dist/` to any static HTTPS host – e.g. GitHub Pages (Settings → Pages), Netlify
-   Drop or Cloudflare Pages. Relative paths are used, so a sub-folder such as
-   `https://<user>.github.io/misha-number-rush/` works.
-3. On the iPad open the URL in **Safari**, wait a few seconds for it to finish loading,
-   then **Share → Add to Home Screen**.
-4. Launch it from the Home Screen once while online; afterwards it runs fully offline
-   (try Airplane Mode).
+### 1. Start the HTTPS server on the Mac
+
+```bash
+npm run ipad
+```
+
+This builds the game, serves it on port 4173 and prints the address to open, for example
+`https://<your-mac>.local:4173/`, plus the CA certificate's location
+(`.cert/misha-local-ca.crt`). The first run creates the CA; later runs reuse it and issue a
+fresh server certificate for the Mac's current name and IP address. Keep the terminal open and
+both devices on the same Wi-Fi. If macOS asks whether `node` may accept incoming connections,
+click **Allow**.
+
+### 2. Trust the certificate on the iPad (once)
+
+1. Send `.cert/misha-local-ca.crt` to the iPad: **AirDrop** it from Finder
+   (`open -R .cert/misha-local-ca.crt`, then right-click → Share → AirDrop), or email it to
+   yourself and tap the attachment in the iPad's Mail app. The iPad says **Profile Downloaded**.
+2. On the iPad open **Settings → General → VPN & Device Management**, tap
+   **Number Rush local CA (…)** under *Downloaded Profile*, tap **Install**, enter the passcode,
+   tap **Install** again and then **Done**. ("Not Verified" is expected for a home-made
+   certificate.)
+3. Open **Settings → General → About → Certificate Trust Settings** and switch on
+   **Number Rush local CA (…)** under *Enable full trust for root certificates*, then tap
+   **Continue**.
+
+The CA is restricted to `.local` names, `localhost` and private network addresses, so it cannot
+be used to impersonate real websites. Its private key stays in `.cert/` on the Mac and is never
+committed. To undo, remove the profile in **Settings → General → VPN & Device Management**.
+
+### 3. Install the game
+
+1. In **Safari** on the iPad open the `https://<your-mac>.local:4173/` address printed by
+   `npm run ipad`. It must load with no certificate warning. Prefer the `.local` name over the IP
+   address: the Home Screen app remembers the exact address, and the IP can change.
+2. Wait until the **Play** button appears, then tap **Share** (in some Safari layouts it is in
+   the **•••** menu) → **Add to Home Screen** → keep **Open as Web App** on if it is shown →
+   **Add**.
+3. Open the game once from the new Home Screen icon **while the Mac server is still running**
+   and wait about 10 seconds. The Home Screen app has its own storage, so this first launch is
+   what saves the game for offline play.
+
+### 4. Check that it works completely offline
+
+1. Stop the server on the Mac (**Ctrl+C**) and turn on **Airplane Mode** on the iPad (check that
+   Wi-Fi is off too).
+2. Close the game fully: swipe up from the bottom edge and swipe the game away in the app
+   switcher.
+3. Open it from the Home Screen icon. The start screen should appear, and after **Play** the
+   whole lap (track, number characters, sounds and music) should work. If the iPad says it
+   cannot open the page, repeat step 3 of *Install the game* with the server running and wait
+   longer.
+4. Turn Airplane Mode off again afterwards.
+
+For offline play always use the Home Screen icon: a plain Safari tab can lose its offline copy
+if the site isn't visited for a while.
+
+**Updating:** after changing the game, run `npm run ipad` again and open the game from the Home
+Screen while on the same Wi-Fi. It downloads the new version by itself (the page may reload
+once); when the Mac is unreachable it simply keeps playing the saved version.
+
+**Troubleshooting:** if the address doesn't open, check that the terminal still shows the server
+and that the Wi-Fi isn't a guest network that isolates devices, then try the IP address the
+script prints. If Safari shows a certificate warning, check that full trust (step 2.3) is on.
+If the Mac's name changes, the Home Screen app points at the old address: add it again.
 
 Quick testing without installing: run `npm run dev`, open the printed `http://<LAN-IP>:5173`
 address in Safari on an iPad on the same Wi-Fi. Everything except offline caching works.
+Any static HTTPS host can also serve `dist/` (relative paths are used, so a sub-folder works).
 
 ## Project layout
 
@@ -87,7 +147,8 @@ src/render/       numberCharacter.ts, glyphs.ts, trackMesh.ts, environment.ts, i
 src/audio/        sound.ts (procedural Web Audio effects + music)
 src/ui/           hud.ts, styles.css
 tests/            maths, course invariants and full-lap route simulations
-scripts/          build-font.mjs (font → 3D glyph JSON), make-icons.mjs (app icons)
+scripts/          build-font.mjs (font → 3D glyph JSON), make-icons.mjs (app icons),
+                  https-preview.mjs (local CA + HTTPS server for the iPad)
 ```
 
 ## Assets and licences
