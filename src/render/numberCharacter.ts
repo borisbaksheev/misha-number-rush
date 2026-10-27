@@ -25,7 +25,7 @@ import { DIGIT_COLORS, INK } from './palette';
 
 /** Height of a single digit in world units at character scale 1. */
 export const CHARACTER_HEIGHT = 1.8;
-const MAX_FORMATION_WIDTH = 3.1; // in digit heights
+const MAX_FORMATION_WIDTH = 3.1; // in digit heights (grows a little for very long numbers)
 const FOOT_LIFT = 0.17;
 
 export type Expression = 'smile' | 'grin' | 'oh' | 'sleepy';
@@ -240,7 +240,8 @@ export class NumberCharacter {
       this.digits.add(m);
       front = Math.max(front, it.glyph.front);
     }
-    const k = Math.min(1, MAX_FORMATION_WIDTH / Math.max(width, 0.01));
+    const maxWidth = Math.min(4.4, MAX_FORMATION_WIDTH + Math.max(0, items.length - 5) * 0.22);
+    const k = Math.min(1, maxWidth / Math.max(width, 0.01));
     this.formation.scale.setScalar(k * CHARACTER_HEIGHT);
     this.formation.position.y = FOOT_LIFT;
     this.width = width * k * CHARACTER_HEIGHT;

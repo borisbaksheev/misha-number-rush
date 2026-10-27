@@ -198,17 +198,17 @@ export class Transformations {
       h.sound.separate();
       const side = h.logic.x > 0 ? -1 : 1;
       const startX = side * (h.player.width / 2 + 0.6);
-      const sAt = h.logic.s;
-      const xAt = h.logic.x;
       h.particles.burst(this.playerPoint(v1, 1), { count: 24, colors: [OP_COLORS.sub, '#ffffff'], speed: 6 });
+      // the separated part keeps pace beside the player while bouncing off the road, then poofs
       this.spawn(k, (dt, age, a) => {
-        // hop off sideways in a few bounces, then poof
-        const hop = Math.abs(Math.sin(age * 5.5)) * 2.2 * Math.max(0, 1 - age / 1.6);
-        h.place(a.char.root, sAt + age * 4, xAt + startX + side * age * 5, hop);
-        a.char.spin = side * age * 4;
+        const l = h.logic;
+        const hop = Math.abs(Math.sin(age * 6)) * 1.8 * Math.max(0.25, 1 - age / 1.8);
+        h.place(a.char.root, l.s + 1 + age * 2.5, l.x + startX + side * age * 3.2, l.y + hop);
+        a.char.spin = side * age * 3;
         a.char.update(dt, { speed: 12, steer: side * 5, airborne: hop > 0.1, stride: age * 14 });
-        if (age > 1.5) {
-          h.particles.puff(a.char.root.position, 14, '#ffffff', 3, 1.2);
+        if (age > 1.7) {
+          h.particles.puff(a.char.root.position, 16, '#ffffff', 3, 1.2);
+          h.sound.click();
           return false;
         }
         return true;

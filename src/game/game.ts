@@ -257,7 +257,7 @@ export class Game implements FxHost {
     const lane = this.course.itemCenter(item);
     const p = this.worldPoint(item.s, lane.center, 3, new Vector3());
     const colors = ['#ffffff', '#ffe066', '#ff7ad9', '#3ff0ff'];
-    this.particles.burst(p, { count: 40, colors, speed: 9, size: 0.6, radius: 2.5 });
+    this.particles.burst(p, { count: 30, colors, speed: 9, size: 0.42, radius: 2.5 });
   }
 
   // ------------------------------------------------------------------ flow
