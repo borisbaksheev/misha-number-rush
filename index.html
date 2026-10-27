@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Number Rush" />
+    <meta name="theme-color" content="#3a9cf5" />
+    <meta name="description" content="A colourful 3D maths racing game where living numbers merge, split and grow." />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>Misha's Number Rush</title>
+  </head>
+  <body>
+    <div id="game" aria-label="Game view"></div>
+
+    <div id="hud" class="hidden">
+      <div class="top">
+        <div class="pill" id="lap">Lap 1</div>
+        <div class="number-badge" id="badge">
+          <div class="value" id="value">2</div>
+          <div class="words" id="words">two</div>
+        </div>
+        <button class="round" id="pauseBtn" aria-label="Pause">
+          <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.5" /><rect x="14" y="5" width="4" height="14" rx="1.5" /></svg>
+        </button>
+      </div>
+      <div id="team"></div>
+      <div id="equation"></div>
+      <div id="banner"><div class="rays"></div><div class="text"></div></div>
+      <div id="toast"></div>
+      <div id="hint">
+        <div class="finger"></div>
+        <div>Hold to run · Slide to steer</div>
+      </div>
+    </div>
+
+    <div id="start" class="screen">
+      <div class="logo">
+        <div class="logo-small">Misha's</div>
+        <div class="logo-big"><span>N</span><span>u</span><span>m</span><span>b</span><span>e</span><span>r</span></div>
+        <div class="logo-big rush"><span>R</span><span>u</span><span>s</span><span>h</span><span>!</span></div>
+      </div>
+      <div class="bottom">
+        <button class="big-btn" id="playBtn">Play</button>
+        <div class="how">Hold your finger to run · Slide to steer</div>
+        <div class="toggles">
+          <button class="toggle" id="sfxToggle" data-on="true">Sounds</button>
+          <button class="toggle" id="musicToggle" data-on="true">Music</button>
+        </div>
+        <div class="loading" id="loading">Loading…</div>
+      </div>
+    </div>
+
+    <div id="pause" class="screen hidden">
+      <div class="panel">
+        <div class="title">Paused</div>
+        <button class="big-btn" id="resumeBtn">Keep playing</button>
+        <button class="mid-btn" id="restartBtn">Start again</button>
+        <div class="toggles">
+          <button class="toggle" id="sfxToggle2" data-on="true">Sounds</button>
+          <button class="toggle" id="musicToggle2" data-on="true">Music</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="fps" class="hidden"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
