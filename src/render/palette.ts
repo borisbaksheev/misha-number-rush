@@ -3,10 +3,10 @@ import type { OpKind } from '../math/numberMath';
 
 /** One distinctive candy colour per digit (original palette). */
 export const DIGIT_COLORS: Record<string, string> = {
-  '0': '#f4f2ff',
+  '0': '#29c9ff',
   '1': '#0fbfae',
   '2': '#ff7a1f',
-  '3': '#2f8fff',
+  '3': '#4157ff',
   '4': '#6cc72b',
   '5': '#ff3d8b',
   '6': '#7b4dff',

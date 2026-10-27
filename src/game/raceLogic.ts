@@ -64,6 +64,8 @@ export class RaceLogic {
   readonly events: RaceEvent[] = [];
   private groundVy = 0;
   private inBoost = false;
+  /** Seconds of boost momentum left (no slowing down until the jump is done). */
+  boostTime = 0;
   private bumperCooldown = new Map<number, number>();
 
   constructor(course = new Course()) {
@@ -84,6 +86,7 @@ export class RaceLogic {
     this.vy = 0;
     this.grounded = true;
     this.fallTime = 0;
+    this.boostTime = 0;
     this.lastGroundS = this.s;
     this.distance = 0;
     this.events.length = 0;
@@ -109,8 +112,12 @@ export class RaceLogic {
     this.time += dt;
 
     // --- speed -------------------------------------------------------------
+    this.boostTime = Math.max(0, this.boostTime - dt);
     if (this.fallTime > 0) {
       this.speed *= Math.exp(-1.5 * dt);
+    } else if (!this.grounded || this.boostTime > 0) {
+      // arcade momentum: no braking in the air or while a boost is carrying us
+      if (this.boostTime > 0) this.speed = Math.max(this.speed, BOOST_SPEED);
     } else if (input.throttle) {
       const room = Math.max(0, 1 - this.speed / MAX_SPEED);
       this.speed += ACCEL * dt * (0.35 + 0.65 * room);
@@ -204,6 +211,7 @@ export class RaceLogic {
     if (inBoost) {
       if (!this.inBoost) this.events.push({ type: 'boost' });
       this.speed = Math.max(this.speed, BOOST_SPEED);
+      this.boostTime = 1.4;
     }
     this.inBoost = inBoost;
   }

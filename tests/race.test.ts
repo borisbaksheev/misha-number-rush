@@ -76,13 +76,13 @@ describe('first lap routes', () => {
 });
 
 describe('big number laps', () => {
-  it('×10 gates on later laps reach one million', () => {
+  it('×10 gates on later laps go past one million', () => {
     const { race } = drive([
       { A: 'left', B: 'left' },
       { A: 'right', B: 'left' },
       { A: 'right', B: 'left' },
     ]);
-    // lap 1: 100, lap 2: 100×10×10×10 = 100,000, lap 3 starts with ×10 = 1,000,000 ...
+    // lap 1 ends at 100; laps 2 and 3 each pass three ×10 gates: 100,000 then 100,000,000
     expect(race.lap).toBe(4);
     expect(race.team.leader).toBe(100_000_000);
   });

@@ -101,7 +101,7 @@ export function buildEnvironment(course: Course): EnvironmentVisual {
   const cr = rng(3);
   for (let i = 0; i < 7; i++) {
     const r = 1 + cr() * 0.9;
-    const g = new IcosahedronGeometry(r, 2);
+    const g = new IcosahedronGeometry(r, 1);
     g.translate((i - 3) * 1.1 + cr() * 0.4, cr() * 0.6 + (i % 2) * 0.4, cr() * 1.2 - 0.6);
     puffParts.push(clean(g));
   }
@@ -114,7 +114,7 @@ export function buildEnvironment(course: Course): EnvironmentVisual {
     emissiveIntensity: 0.1,
   });
   const center = new Vector3(-25, 0, -40);
-  const seaCount = 140;
+  const seaCount = 120;
   const sea = new InstancedMesh(puff, cloudMat, seaCount);
   const m = new Matrix4();
   for (let i = 0; i < seaCount; i++) {

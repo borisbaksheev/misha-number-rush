@@ -1,6 +1,7 @@
 // Visuals for track items: glowing maths portals, jelly bumpers and trampoline pads.
 import {
   AdditiveBlending,
+  BufferGeometry,
   CapsuleGeometry,
   Color,
   CylinderGeometry,
@@ -17,6 +18,7 @@ import {
   TorusGeometry,
   type Material,
 } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type MathOp, opLabel } from '../math/numberMath';
 import { layoutText, SIGN_STYLE } from './glyphs';
 import { OP_COLORS } from './palette';
@@ -107,15 +109,16 @@ export class Portal {
     ring.castShadow = true;
     this.group.add(ring);
 
-    // glossy white beads around the arch
-    const beadGeo = new SphereGeometry(tube * 0.55, 12, 8);
-    const beads = Math.round(arc * radius / 1.6);
+    // glossy white beads around the arch (one merged mesh)
+    const beadParts: BufferGeometry[] = [];
+    const beads = Math.round((arc * radius) / 1.6);
     for (let i = 1; i < beads; i++) {
       const a = start + (i / beads) * arc;
-      const b = new Mesh(beadGeo, white);
-      b.position.set(Math.cos(a) * radius, h + Math.sin(a) * radius, tube * 0.75);
-      this.group.add(b);
+      const b = new SphereGeometry(tube * 0.55, 10, 7);
+      b.translate(Math.cos(a) * radius, h + Math.sin(a) * radius, tube * 0.75);
+      beadParts.push(b);
     }
+    this.group.add(new Mesh(mergeGeometries(beadParts), white));
 
     // feet where the arch meets the road
     const footGeo = new SphereGeometry(tube * 1.8, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);

@@ -1,5 +1,6 @@
 // Visual track: road ribbons, candy curbs, floating tiles, ramp, boost pad, tunnel and pillars.
 import {
+  BufferAttribute,
   BufferGeometry,
   CanvasTexture,
   Color,
@@ -214,6 +215,75 @@ export function buildTrack(course: Course): TrackVisual {
     } else {
       addRibbon(a, b, 0, true);
     }
+  }
+
+  // ---- garden islands between separated fork lanes
+  const gardenGeos: BufferGeometry[] = [];
+  const gardenBody: BufferGeometry[] = [];
+  const gap = (s: number) => {
+    const lanes = course.lanes(s);
+    return lanes.length > 1 ? lanes[1].center - lanes[1].width / 2 - 0.5 : 0;
+  };
+  for (const f of data.forks) {
+    let a = f.start;
+    while (a < f.end && gap(a) < 0.25) a += 0.5;
+    let b = f.end;
+    while (b > a && gap(b) < 0.25) b -= 0.5;
+    if (b - a < 4) continue;
+    gardenGeos.push(
+      sweep(path, a, b, {
+        step: 1,
+        lift: () => -0.12,
+        profile: (s) => [
+          [-gap(s), 0],
+          [gap(s), 0],
+        ],
+        color: () => new Color('#7fdc6a'),
+      }),
+    );
+    gardenBody.push(
+      sweep(path, a, b, {
+        step: 2,
+        lift: () => -0.12,
+        profile: (s) => bodyProfile(Math.max(0.2, gap(s) * 2)),
+        color: (_s, j) => (j === 2 || j === 3 ? new Color('#e9a3c2') : new Color('#f3b49b')),
+        caps: true,
+      }),
+    );
+    // round bushes and flowers along the island
+    const flowerColors = ['#ff7eb6', '#ffd166', '#ffffff', '#b69cff', '#ff9f68'];
+    for (let s = a + 3; s < b - 2; s += 3.2) {
+      const g = gap(s);
+      if (g < 0.9) continue;
+      const fr2 = newFrame();
+      path.frameAt(s, fr2);
+      const n = g > 2 ? 3 : 1;
+      for (let k = 0; k < n; k++) {
+        const x = n === 1 ? 0 : (k - 1) * g * 0.55;
+        const big = k === 1 || n === 1;
+        const r = big ? Math.min(1.1, g * 0.5) : 0.45;
+        const bush = new SphereGeometry(r, 14, 10);
+        bush.scale(1, 0.8, 1);
+        const p = fr2.pos.clone().addScaledVector(fr2.right, x).addScaledVector(fr2.up, r * 0.6);
+        bush.translate(p.x, p.y, p.z);
+        const col = big && (Math.round(s) % 3 === 0) ? flowerColors[Math.round(s) % flowerColors.length] : '#5fca6b';
+        const cnt = bush.getAttribute('position').count;
+        const c = new Color(col);
+        const arr = new Float32Array(cnt * 3);
+        for (let i = 0; i < cnt; i++) arr.set([c.r, c.g, c.b], i * 3);
+        bush.setAttribute('color', new BufferAttribute(arr, 3));
+        bush.deleteAttribute('uv');
+        gardenGeos.push(bush.toNonIndexed());
+      }
+    }
+  }
+  if (gardenGeos.length) {
+    const nonIndexed = gardenGeos.map((g) => (g.index ? g.toNonIndexed() : g));
+    for (const g of nonIndexed) if (g.getAttribute('uv')) g.deleteAttribute('uv');
+    const garden = new Mesh(mergeGeometries(nonIndexed), new MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }));
+    garden.receiveShadow = true;
+    garden.castShadow = true;
+    group.add(garden, new Mesh(mergeGeometries(gardenBody), bodyMat));
   }
 
   const road = new Mesh(mergeGeometries([...roadGeos, ...tileGeos]), roadMat);

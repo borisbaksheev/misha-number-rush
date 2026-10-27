@@ -80,7 +80,7 @@ body {
 
 .number-badge {
   flex: 1;
-  max-width: 70%;
+  max-width: min(70%, 560px);
   text-align: center;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 28px;

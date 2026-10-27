@@ -107,7 +107,7 @@ function digitMaterial(ch: string, tier: Tier): Material {
       metalness: tier === 2 ? 0.25 : 0,
       clearcoat: 1,
       clearcoatRoughness: 0.06,
-      iridescence: tier === 2 ? 1 : 0,
+      iridescence: tier === 2 ? 0.6 : 0,
       iridescenceIOR: 1.6,
       emissive: color.clone().multiplyScalar(0.05),
     });
