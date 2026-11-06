@@ -1,0 +1,51 @@
+name: Deploy to GitHub Pages
+
+# Builds the game (both Racing and Sky Numbers), runs the tests and publishes dist/ to
+# https://borisbaksheev.github.io/misha-number-rush/
+on:
+  push:
+    branches: [feature/sky-numbers, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          BASE_PATH: /misha-number-rush/
+      - name: Check the site contains both game modes and no local certificates
+        run: |
+          grep -q 'id="raceBtn"' dist/index.html
+          grep -q 'id="skyBtn"' dist/index.html
+          test -f dist/sw.js && test -f dist/version.json && test -f dist/manifest.webmanifest
+          ! find dist -name '*.key' -o -name '*.crt' -o -name '*.pem' | grep .
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

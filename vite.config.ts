@@ -17,7 +17,9 @@ function buildVersion(): string {
 const VERSION = buildVersion();
 
 export default defineConfig({
-  base: './',
+  // Relative paths work from any folder (local HTTPS for the iPad); the GitHub Pages build
+  // pins the sub-path with BASE_PATH=/misha-number-rush/.
+  base: process.env.BASE_PATH || './',
   define: {
     __APP_VERSION__: JSON.stringify(VERSION),
   },

@@ -12,6 +12,19 @@ chosen on the start screen:
 Built with Three.js + TypeScript + Vite as an installable, fully offline PWA. No backend,
 accounts, ads, purchases or network services.
 
+## Play online
+
+**https://borisbaksheev.github.io/misha-number-rush/**
+
+Open it in Safari on an iPad (no certificates, local server or settings needed). To install it
+like an app: **Share → Add to Home Screen**, then open it once from the new icon while online so
+it is saved for offline play. New versions are picked up automatically when the game is opened
+or brought back to the foreground (never in the middle of a game).
+
+The site is built and published by GitHub Actions (`.github/workflows/pages.yml`) on every push
+to `feature/sky-numbers` or `main`: it runs the tests, builds with `BASE_PATH=/misha-number-rush/`
+and deploys `dist/` to GitHub Pages. Local development certificates are never part of the site.
+
 ## Play
 
 | Action | Touch (iPad) | Keyboard (desktop testing) |
@@ -92,9 +105,10 @@ the page is hidden; for automated testing only).
 The start screen shows the build version (git commit and build time) at the bottom, so you can
 check which version an iPad is running.
 
-## Installing on an iPad (offline PWA)
+## Installing from this Mac instead (local HTTPS, optional)
 
-Safari only enables offline mode (service workers) on a **trusted HTTPS** address. The game is
+The public website above is the easiest way. This older route serves the game from the Mac
+without the internet. Safari only enables offline mode (service workers) on a **trusted HTTPS** address. The game is
 served from this Mac over the home Wi-Fi with its own small certificate authority (CA), which
 you trust once on the iPad. Nothing is uploaded to the internet.
 
