@@ -12,9 +12,38 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
-const game = new Game($('game'));
+$('version').textContent = `v${__APP_VERSION__}`;
+
+/** Friendly full-screen message with a reload button instead of a silent broken screen. */
+function showProblem(title: string, text: string): void {
+  $('problemTitle').textContent = title;
+  $('problemText').textContent = text;
+  $('problem').classList.remove('hidden');
+}
+$('reloadBtn').addEventListener('pointerup', () => location.reload());
+
+let game: Game;
+try {
+  game = new Game($('game'));
+} catch (err) {
+  console.error(err);
+  $('loading').textContent = '';
+  showProblem(
+    'Oops!',
+    'The 3D game could not start on this device. Close the app completely and open it again. ' +
+      `(${err instanceof Error ? err.message : String(err)})`,
+  );
+  throw err;
+}
 (window as unknown as { __game: Game }).__game = game;
 $('loading').classList.add('hidden');
+
+// iPad Safari can drop the WebGL context when memory runs low; offer a clean restart.
+game.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  game.pause();
+  showProblem('Taking a little rest', 'The picture needs a quick refresh. Tap the button to keep playing.');
+});
 
 function syncToggles(): void {
   for (const id of ['sfxToggle', 'sfxToggle2']) $(id).dataset.on = String(game.sound.sfxOn);

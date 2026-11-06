@@ -6,7 +6,7 @@ import {
   Matrix4,
   NeutralToneMapping,
   Object3D,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PMREMGenerator,
   PointLight,
   Scene,
@@ -105,7 +105,7 @@ export class Game implements FxHost {
     this.renderer.toneMapping = NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFSoftShadowMap;
+    this.renderer.shadowMap.type = PCFShadowMap;
     container.appendChild(this.renderer.domElement);
 
     this.rig = new CameraRig(1);

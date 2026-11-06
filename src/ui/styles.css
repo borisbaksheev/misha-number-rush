@@ -566,3 +566,37 @@ button {
     font-size: 70px;
   }
 }
+
+.version {
+  font: 12px/1.2 ui-monospace, monospace;
+  color: #fff;
+  opacity: 0.6;
+}
+
+#problem {
+  background: rgba(44, 24, 64, 0.45);
+  z-index: 20;
+}
+
+#problem .panel {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 36px;
+  padding: 30px;
+  max-width: min(90vw, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+#problem .title {
+  font-weight: 700;
+  font-size: 40px;
+}
+
+.problem-text {
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 1.35;
+}
