@@ -14,6 +14,7 @@ export const DIGIT_COLORS: Record<string, string> = {
   '8': '#ff3f4a',
   '9': '#b56dff',
   ',': '#ffffff',
+  '.': '#ffffff',
 };
 
 export const OP_COLORS: Record<OpKind | 'join' | 'finale', string> = {

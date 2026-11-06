@@ -344,6 +344,20 @@ export class Sound {
     this.tone(520, t, 0.25, { type: 'triangle', gain: 0.08, slide: 260 });
   }
 
+  /**
+   * Storm-cloud zap: a short bright crackle, a friendly "boing" and a soft far-away rumble.
+   * Deliberately quiet and short so it is fun rather than frightening.
+   */
+  thunder(): void {
+    const t = this.now;
+    if (t === null) return;
+    this.noiseBurst(t, 0.18, 0.1, 3500, 900, 'bandpass');
+    this.noiseBurst(t + 0.05, 1.1, 0.08, 220, 70, 'lowpass');
+    this.tone(85, t + 0.04, 0.8, { type: 'sine', gain: 0.13, slide: 50 });
+    this.tone(660, t + 0.02, 0.3, { type: 'triangle', gain: 0.09, slide: 330 });
+    this.bell(NOTE(79), t + 0.12, 0.45, 0.07);
+  }
+
   /** Swoosh when flying through a portal. */
   whoosh(): void {
     const t = this.now;

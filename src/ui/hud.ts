@@ -17,7 +17,7 @@ export class Hud {
   private hint = $('hint');
   private hintText = $('hintText');
   private toastTimer = 0;
-  private shown = -1;
+  private shown = '';
 
   show(visible: boolean): void {
     this.hud.classList.toggle('hidden', !visible);
@@ -33,11 +33,16 @@ export class Hud {
   }
 
   setValue(n: number, animate = true): void {
-    if (n === this.shown) return;
-    this.shown = n;
-    this.value.textContent = formatNumber(n);
-    this.words.textContent = numberToWords(n);
-    this.badge.classList.toggle('gold', n >= 1_000_000);
+    this.setValueText(formatNumber(n), numberToWords(n), n, animate);
+  }
+
+  /** Show a number given as text (exact fractions such as "3.5" with words "three point five"). */
+  setValueText(text: string, words: string, magnitude: number, animate = true): void {
+    if (text === this.shown) return;
+    this.shown = text;
+    this.value.textContent = text;
+    this.words.textContent = words;
+    this.badge.classList.toggle('gold', magnitude >= 1_000_000);
     if (animate) this.restartAnimation(this.badge, 'bump');
   }
 

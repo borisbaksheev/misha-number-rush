@@ -1,6 +1,8 @@
 // Headless flight simulation for Sky Numbers: steering, portals, number bubbles and storm clouds.
-// Rendering only reads this state; all value changes go through the shared maths engine.
-import { applyOp, isValidValue, type MathOp } from '../math/numberMath';
+// Rendering only reads this state. Values are exact dyadic numbers (whole ÷ 2ⁿ) because storm
+// clouds halve the number: 7 → 3.5, 1 → 0.5.
+import { applyDyadic, dyadic, equals, halve, key, toNumber, type Dyadic } from '../math/dyadic';
+import type { MathOp } from '../math/numberMath';
 import { seededRandom } from '../math/random';
 import { generateChoices, unitFor } from './choices';
 import {
@@ -27,8 +29,8 @@ export interface RowState {
   f: RowFeature;
   ops: MathOp[] | null;
   lanes: Lane[];
-  /** Value the current choices were generated for. */
-  forValue: number;
+  /** Value the current choices were generated for (exact key). */
+  forValue: string;
   locked: boolean;
   passed: boolean;
   chosen: number;
@@ -47,23 +49,34 @@ export interface StormState {
 }
 
 export type SkyEvent =
-  | { type: 'portal'; row: RowState; lane: number; op: MathOp; before: number; after: number }
-  | { type: 'bubble'; bubble: BubbleState; op: MathOp | null; before: number; after: number }
-  | { type: 'storm'; storm: StormState; before: number; after: number; halved: boolean }
+  | { type: 'portal'; row: RowState; lane: number; op: MathOp; before: Dyadic; after: Dyadic }
+  | { type: 'bubble'; bubble: BubbleState; op: MathOp | null; before: Dyadic; after: Dyadic }
+  | { type: 'storm'; storm: StormState; before: Dyadic; after: Dyadic; halved: boolean }
   | { type: 'rowChoices'; row: RowState }
   | { type: 'cycle'; cycle: number };
 
 export const START_VALUE = 8;
-export const BASE_SPEED = 17;
-export const MAX_SKY_SPEED = 22;
+export const MIN_SKY_SPEED = 13;
+export const MAX_SKY_SPEED = 27;
 export const STORM_COOLDOWN = 2.5;
+
+/**
+ * Number-based flight speed: bigger numbers fly a little faster (log scale), halving slows down.
+ * 0.5 → 15, 8 → 18.4, 100 → 20, 1,000,000 → 26; always between MIN and MAX.
+ */
+export function speedFor(value: Dyadic | number): number {
+  const v = typeof value === 'number' ? value : toNumber(value);
+  return Math.max(MIN_SKY_SPEED, Math.min(MAX_SKY_SPEED, 17 + 1.5 * Math.log10(Math.max(v, 1e-6))));
+}
+/** Cruising speed at the start value (used as a reference by the camera). */
+export const BASE_SPEED = speedFor(START_VALUE);
 export const PLAYER_RADIUS = 0.7;
 const LOOKAHEAD = 520;
 const LOCK_DISTANCE = 30;
 const ASSIST_DISTANCE = 42;
 
 export class SkyLogic {
-  value = START_VALUE;
+  value: Dyadic = dyadic(START_VALUE);
   d = 0;
   x = 0;
   y = CORRIDOR.yStart;
@@ -91,8 +104,8 @@ export class SkyLogic {
     this.reset();
   }
 
-  reset(start = START_VALUE): void {
-    this.value = start;
+  reset(start: number | Dyadic = START_VALUE): void {
+    this.value = typeof start === 'number' ? dyadic(start) : start;
     this.d = 0;
     this.x = 0;
     this.y = CORRIDOR.yStart;
@@ -100,7 +113,7 @@ export class SkyLogic {
     this.targetY = CORRIDOR.yStart;
     this.vx = this.vy = 0;
     this.bounceX = this.bounceY = 0;
-    this.speed = BASE_SPEED;
+    this.speed = speedFor(this.value);
     this.time = 0;
     this.slowTimer = 0;
     this.stormCooldown = 0;
@@ -128,7 +141,7 @@ export class SkyLogic {
     while (this.cycles * CYCLE < this.d + LOOKAHEAD) {
       for (const f of generateCycle(this.cycles, this.seed)) {
         if (f.kind === 'row') {
-          this.rows.push({ f, ops: null, lanes: f.layout4, forValue: -1, locked: false, passed: false, chosen: -1 });
+          this.rows.push({ f, ops: null, lanes: f.layout4, forValue: '', locked: false, passed: false, chosen: -1 });
         } else if (f.kind === 'storm') this.storms.push({ f, hits: 0 });
         else if (f.kind === 'bubble') this.bubbles.push({ f, k: null, taken: false });
         else this.scenery.push(f);
@@ -147,10 +160,11 @@ export class SkyLogic {
     const row = this.nextRow();
     if (!row) return;
     if (row.f.d - this.d < LOCK_DISTANCE && row.ops) row.locked = true;
-    if (row.locked || row.forValue === this.value) return;
-    const ops = generateChoices(this.value, seededRandom(row.f.seed ^ (this.value % 2147483647)));
+    const k = key(this.value);
+    if (row.locked || row.forValue === k) return;
+    const ops = generateChoices(this.value, seededRandom(row.f.seed ^ hash(k)));
     row.ops = ops;
-    row.forValue = this.value;
+    row.forValue = k;
     row.lanes = ops.length >= 4 ? row.f.layout4 : row.f.layout3;
     this.events.push({ type: 'rowChoices', row });
   }
@@ -169,12 +183,17 @@ export class SkyLogic {
     return best;
   }
 
-  private change(op: MathOp): { before: number; after: number } | null {
-    const r = applyOp(this.value, op);
-    if (!r.ok || r.value < 1) return null;
+  private change(op: MathOp): { before: Dyadic; after: Dyadic } | null {
+    const r = applyDyadic(this.value, op);
+    if (!r.ok) return null;
     const before = this.value;
     this.value = r.value;
     return { before, after: r.value };
+  }
+
+  /** Current value as an ordinary number (approximate; for visuals and speed only). */
+  get approx(): number {
+    return toNumber(this.value);
   }
 
   update(dt: number, input: FlightInput): void {
@@ -182,9 +201,8 @@ export class SkyLogic {
     this.stormCooldown = Math.max(0, this.stormCooldown - dt);
     this.slowTimer = Math.max(0, this.slowTimer - dt);
 
-    // automatic forward flight that very slowly speeds up
-    const cruise = Math.min(MAX_SKY_SPEED, BASE_SPEED + this.d / 2500);
-    const want = cruise * (this.slowTimer > 0 ? 0.55 : 1);
+    // automatic forward flight; the speed follows the size of the number
+    const want = speedFor(this.value) * (this.slowTimer > 0 ? 0.55 : 1);
     this.speed += (want - this.speed) * (1 - Math.exp(-(this.slowTimer > 0 ? 6 : 1.5) * dt));
 
     // steering: the finger moves a target, the number glides to it and stays there on release
@@ -246,8 +264,8 @@ export class SkyLogic {
       if (dz < 140 && b.k === null && dz > 0) {
         // decide its number when it comes into view so it suits the current value
         const rand = seededRandom(b.f.seed);
-        const k = unitFor(this.value) * (1 + Math.floor(rand() * 3));
-        b.k = applyOp(this.value, { kind: 'add', operand: k }).ok ? k : 0;
+        const k = unitFor(this.approx) * (1 + Math.floor(rand() * 3));
+        b.k = applyDyadic(this.value, { kind: 'add', operand: k }).ok ? k : 0;
       }
       if (Math.abs(dz) > 1.8) continue;
       if (Math.hypot(b.f.x - this.x, b.f.y - this.y) > 2.4) continue;
@@ -267,20 +285,20 @@ export class SkyLogic {
       const dist = Math.hypot(dx, dy);
       if (dist > s.f.r * 0.68 + PLAYER_RADIUS) continue;
       if (this.stormCooldown > 0) continue;
-      // cartoon bounce away from the cloud, a short slowdown, and halve even numbers
+      // cartoon bounce away from the cloud and the number is halved exactly (7 → 3.5);
+      // flight carries on straight away (the smaller number simply flies a bit slower)
       const nx = dist > 0.01 ? dx / dist : 1;
       const ny = dist > 0.01 ? dy / dist : 0;
       this.bounceX = nx * 9;
       this.bounceY = ny * 6;
       this.targetX += nx * 3.5;
       this.targetY += ny * 2;
-      this.slowTimer = 1.3;
       this.stormCooldown = STORM_COOLDOWN;
       s.hits++;
       const before = this.value;
-      const halve = before > 1 && before % 2 === 0;
-      if (halve) this.change({ kind: 'div', operand: 2 });
-      this.events.push({ type: 'storm', storm: s, before, after: this.value, halved: halve });
+      const half = halve(before);
+      if (half) this.value = half;
+      this.events.push({ type: 'storm', storm: s, before, after: this.value, halved: !!half });
     }
   }
 
@@ -288,8 +306,15 @@ export class SkyLogic {
     return this.events.splice(0, this.events.length);
   }
 
-  /** Sanity check used by tests. */
+  /** Sanity check used by tests: a positive, exact value within the game's limits. */
   valid(): boolean {
-    return isValidValue(this.value) && this.value >= 1;
+    return this.value.num > 0n && this.value.exp >= 0 && toNumber(this.value) <= 1e9 && equals(this.value, dyadic(this.value.num, this.value.exp));
   }
+}
+
+/** Small string hash so choices are seeded by the exact value. */
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
 }

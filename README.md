@@ -57,10 +57,17 @@ scaled to the number's size (100 offers things like +80, −10, ÷2, ×10). If d
 
 A seeded route of about 70 seconds repeats endlessly with fresh randomness: open sky with number
 bubbles, a colourful cloud tunnel, storm clouds, a white cloud canyon and five portal rows.
-**Storm clouds** are dark but friendly: bumping one gives a puff of smoke and sparks, a short
-slowdown and, if your number is even, halves it (16 → 8, shown as 16 ÷ 2 = 8). Odd numbers only
-slow down, the value never drops below 1, and a short cooldown prevents repeated penalties. You
-can always fly around them. Portals gently help the number line up, so a small child can't miss.
+**Storm clouds** are dark but friendly, and there are 40 % more of them than in the first version
+(5.6 per stretch on average instead of 4, spaced at least 74 units apart and never near a portal
+row, with a free path past every one). Bumping one strikes a cartoon lightning bolt, plays a soft
+thunder, bursts into colourful sparks and smoke, wobbles the number and **always halves it**:
+100 → 50, 16 → 8, 7 → **3.5**, 1 → **0.5** (shown as 7 ÷ 2 = 3.5). Fractions are kept exactly as
+whole ÷ 2ⁿ (no rounding and no floating-point leftovers) down to 1 ÷ 2²⁰; a 2.5 s cooldown means
+one cloud halves only once. Flight continues straight away. The number's size sets the flight
+speed (bigger numbers fly a little faster: 0.5 → 15, 8 → 18, 1,000,000 → 26), so halving also slows
+it slightly. After a fraction, portals offer exact choices such as ×2 (3.5 × 2 = 7). Dividing a whole
+number in a portal still always gives a whole number.
+Portals gently help the number line up, so a small child can't miss.
 
 ## Racing: what's in the first track
 

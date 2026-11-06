@@ -225,18 +225,28 @@ export class NumberCharacter {
     this.setValue(value);
   }
 
+  private shownText = '';
+
   setValue(value: number): void {
-    if (value === this.value) return;
-    this.value = value;
-    this.tier = tierFor(value);
-    const text = formatNumber(value);
+    this.setDisplay(formatNumber(value), value);
+  }
+
+  /**
+   * Show any number text (e.g. "3.5" or "0.0625" for exact fractions in Sky Numbers).
+   * `magnitude` is its approximate size, used only for the look (crown, shine, gold).
+   */
+  setDisplay(text: string, magnitude: number): void {
+    if (text === this.shownText) return;
+    this.shownText = text;
+    this.value = magnitude;
+    this.tier = tierFor(magnitude);
     const { items, width } = layoutText(text, CHARACTER_STYLE, 0.06);
     this.digits.clear();
     let front = 0;
     for (const it of items) {
       const m = new Mesh(it.glyph.geometry, digitMaterial(it.ch, this.tier));
       m.position.x = it.x;
-      if (it.ch === ',') m.position.y = 0.02;
+      if (it.ch === ',' || it.ch === '.') m.position.y = 0.02;
       m.castShadow = true;
       m.receiveShadow = false;
       this.digits.add(m);

@@ -63,10 +63,33 @@ const HEIGHTS3 = [
   [10.5, 8, 10.5],
 ];
 
+/** Storm clouds per cycle before the +40 % increase (the original layout had four). */
+export const BASE_STORMS_PER_CYCLE = 4;
+/** Storm frequency relative to the original layout. */
+export const STORM_RATE = 1.4;
+/** Storms keep at least this far from portal rows and from each other. */
+export const STORM_ROW_GAP = 45;
+export const STORM_MIN_SPACING = 50;
+/** Stretches between portal rows where storms may appear (distance within a cycle). */
+export const STORM_WINDOWS: [number, number][] = [
+  [195, 435],
+  [525, 745],
+  [835, 1015],
+  [1105, 1205],
+];
+
+/**
+ * How many storms cycle `c` gets: 5.6 per cycle on average (4 × 1.4), spread as 5, 6, 5, 6, 6 …
+ * so every five cycles have exactly 28 storms instead of 20.
+ */
+export function stormsInCycle(c: number): number {
+  const rate = BASE_STORMS_PER_CYCLE * STORM_RATE;
+  return Math.floor((c + 1) * rate + 1e-9) - Math.floor(c * rate + 1e-9);
+}
+
 /** Where things sit inside one cycle (distance from the cycle start). */
 export const TEMPLATE = {
   rows: [150, 480, 790, 1060, 1250],
-  storms: [400, 650, 715, 915],
   tunnel: [205, 345] as const,
   canyon: [845, 985] as const,
   bubbleArcs: [60, 545, 1110],
@@ -94,8 +117,24 @@ export function generateCycle(cycle: number, seed = 2026): SkyFeature[] {
     });
   });
 
+  // Storms: stratified over the free stretches with random jitter (natural spacing), never
+  // closer than STORM_MIN_SPACING, alternating sides so there is always a way past.
+  const total = STORM_WINDOWS.reduce((t, [a, b]) => t + (b - a), 0);
+  const stormCount = stormsInCycle(cycle);
+  const spots: number[] = [];
+  for (let i = 0; i < stormCount; i++) {
+    // jitter within the middle 40 % of each slot: spacing ≥ 0.6 × slot (≥ 74 units at 6 storms)
+    let t = ((i + 0.3 + rand() * 0.4) / stormCount) * total;
+    for (const [a, b] of STORM_WINDOWS) {
+      if (t <= b - a) {
+        spots.push(a + t);
+        break;
+      }
+      t -= b - a;
+    }
+  }
   let side = rand() < 0.5 ? -1 : 1;
-  for (const d of TEMPLATE.storms) {
+  for (const d of spots) {
     side = -side;
     out.push({
       kind: 'storm',

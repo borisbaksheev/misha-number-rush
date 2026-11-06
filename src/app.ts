@@ -217,6 +217,7 @@ export class App implements ModeHost {
       const median = times[Math.floor(times.length / 2)];
       this.loader.progress(0.9 + step * 0.05);
       if (median <= 24) return; // ~40+ fps: keep this quality
+      if (median >= 200) return; // frames are paused (page hidden), not slow: measure nothing
       this.setQuality(LOWER[this.quality], true);
     }
   }

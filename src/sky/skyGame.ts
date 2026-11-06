@@ -20,14 +20,15 @@ import {
 import type { GameMode, ModeHost, ModeState, Quality } from '../app';
 import type { Sound } from '../audio/sound';
 import type { InputController } from '../game/input';
-import { formatNumber, type MathOp } from '../math/numberMath';
+import { dyadic, dyadicToWords, formatDyadic, toNumber } from '../math/dyadic';
+import type { MathOp } from '../math/numberMath';
 import { seededRandom } from '../math/random';
 import { prewarmGlyphs } from '../render/glyphs';
 import { NumberCharacter } from '../render/numberCharacter';
 import { Particles } from '../render/particles';
 import type { Hud } from '../ui/hud';
 import { frames, nextFrame } from '../ui/loader';
-import { colorsOf, SkyFx, type SkyFxHost } from './skyFx';
+import { colorsOf, showValue, SkyFx, type SkyFxHost } from './skyFx';
 import { CORRIDOR } from './skyCourse';
 import { MAX_SKY_SPEED, SkyLogic, type RowState, type SkyEvent } from './skyLogic';
 import {
@@ -36,6 +37,7 @@ import {
   cloudMaterial,
   islandGeometry,
   islandMaterial,
+  LightningBolt,
   SkyPortal,
   skyDome,
   SKY_SUN,
@@ -131,6 +133,7 @@ export class SkyGame implements GameMode, SkyFxHost {
   private bubblePool: BubbleVisual[] = [];
   private bubbles = new Map<number, BubbleVisual>();
   private trail = new Trail();
+  private bolt = new LightningBolt();
   private time = 0;
   private timeScale = 1;
   private slowTimer = 0;
@@ -168,7 +171,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     this.hemi = new HemisphereLight('#eaf6ff', '#bcc8ff', 1.15);
     const sun = new DirectionalLight('#fff4e0', 2.1);
     sun.position.copy(SKY_SUN).multiplyScalar(100);
-    s.add(this.hemi, sun, this.sky, this.world, this.particles.group, this.player.root, this.trail.mesh);
+    s.add(this.hemi, sun, this.sky, this.world, this.particles.group, this.player.root, this.trail.mesh, this.bolt.group);
 
     const white = cloudMaterial('#ffffff', '#9fb4e0', '#ffffff', 0.45);
     this.near = new CloudLayer(cloudGeometry(11, 7, 1), white, 520);
@@ -194,7 +197,7 @@ export class SkyGame implements GameMode, SkyFxHost {
       this.world.add(m);
     }
     this.player.root.traverse((o) => (o.castShadow = false));
-    this.hud.setValue(this.logic.value, false);
+    this.showHudValue(false);
   }
 
   // ------------------------------------------------------------------ GameMode
@@ -247,16 +250,18 @@ export class SkyGame implements GameMode, SkyFxHost {
       warm.add(v.group);
       this.bubblePool.push(v);
     }
-    // every look a number can have: all digit colours, crown, shiny and golden
+    // every look a number can have: all digit colours, a fraction, crown, shiny and golden
     const looks = [123, 456, 789, 10, 1_000, 123_456, 1_000_000, 0];
     const chars = looks.map((v, i) => {
       const c = new NumberCharacter(v, 0.7);
+      if (i === 3) showValue(c, dyadic(7, 1)); // 3.5
       c.root.position.set(i * 2.4 - 8.4, 10.5, -10);
       c.update(0.016, { speed: 10, steer: 0, airborne: true, stride: 0, flying: true });
       warm.add(c.root);
       return c;
     });
     this.particles.showAllForWarmup(this.tmp.set(0, 9, -8));
+    this.bolt.strike(this.tmp.set(-4, 14, -9), this.tmp2.set(-2, 8, -9));
     progress(0.35);
     await nextFrame();
     await this.renderer.compileAsync(this.scene, this.camera);
@@ -307,7 +312,7 @@ export class SkyGame implements GameMode, SkyFxHost {
   private resetFlight(): void {
     this.logic.reset();
     this.fx.reset();
-    this.player.setValue(this.logic.value);
+    showValue(this.player, this.logic.value);
     this.player.spin = this.player.flip = 0;
     this.trail.clear();
     for (const [, list] of this.portals) list.forEach((p) => this.releasePortal(p));
@@ -317,7 +322,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     for (const [, v] of this.bubbles) this.releaseBubble(v);
     this.bubbles.clear();
     this.particles.clear();
-    this.hud.setValue(this.logic.value, false);
+    this.showHudValue(false);
     this.hud.setTeam('');
     this.hud.setPill('0 m');
     this.input.reset();
@@ -352,7 +357,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     const l = this.logic;
     const row = l.nextRow();
     const ops = row?.ops?.map((o) => `${o.kind}${o.operand}`).join(',') ?? '-';
-    return `sky ${this.mode} d=${l.d.toFixed(0)} x=${l.x.toFixed(1)} y=${l.y.toFixed(1)} v=${l.speed.toFixed(1)} value=${formatNumber(l.value)} next=[${ops}] portals=${l.portalsFlown}`;
+    return `sky ${this.mode} d=${l.d.toFixed(0)} x=${l.x.toFixed(1)} y=${l.y.toFixed(1)} v=${l.speed.toFixed(1)} value=${formatDyadic(l.value)} next=[${ops}] portals=${l.portalsFlown}`;
   }
 
   // ------------------------------------------------------------------ SkyFxHost
@@ -372,6 +377,15 @@ export class SkyGame implements GameMode, SkyFxHost {
 
   skyFlash(strength: number): void {
     this.flashAmt = Math.max(this.flashAmt, strength);
+  }
+
+  lightning(from: Vector3, to: Vector3): void {
+    this.bolt.strike(from, to);
+  }
+
+  private showHudValue(animate: boolean): void {
+    const v = this.logic.value;
+    this.hud.setValueText(formatDyadic(v), dyadicToWords(v), toNumber(v), animate);
   }
 
   // ------------------------------------------------------------------ frame
@@ -397,6 +411,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     }
 
     this.fx.update(gdt);
+    this.bolt.update(dt);
     this.syncPlayer(gdt);
     this.syncFeatures(gdt);
     this.syncClouds();
@@ -448,10 +463,13 @@ export class SkyGame implements GameMode, SkyFxHost {
         else this.sound.collect();
         break;
       }
-      case 'storm':
+      case 'storm': {
         this.storms.get(e.storm.f.id)?.hit();
-        this.fx.storm(e.before, e.after, e.halved);
+        const f = e.storm.f;
+        this.fx.storm(e.before, e.after, e.halved, this.tmp.set(f.x, f.y, -(f.d - l.d)));
+        this.trail.setColors(colorsOf(e.after));
         break;
+      }
       case 'cycle':
         this.hud.toast('What a long flight! More sky ahead!', 2.4);
         break;
@@ -538,7 +556,7 @@ export class SkyGame implements GameMode, SkyFxHost {
       }
       v.group.position.set(s.f.x, s.f.y + Math.sin(this.time * 0.8 + s.f.id) * 0.3, z(s.f.d));
       // once it has drifted past the player, puff away before it can fill the camera view
-      const pass = Math.min(1, Math.max(0, (ahead + 6) / 6));
+      const pass = Math.min(1, Math.max(0, (ahead + 4) / 5));
       v.group.scale.setScalar(s.f.r * v.size * pass);
       v.group.visible = pass > 0.02;
       v.update(this.time, dt);
@@ -769,8 +787,8 @@ export class SkyGame implements GameMode, SkyFxHost {
     l.reset(value ?? l.value);
     l.d = d;
     l.update(0.0001, { dx: 0, dy: 0, axisX: 0, axisY: 0 });
-    this.player.setValue(l.value);
-    this.hud.setValue(l.value, false);
+    showValue(this.player, l.value);
+    this.showHudValue(false);
   }
 }
 

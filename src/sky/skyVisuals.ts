@@ -449,7 +449,7 @@ export class StormVisual {
   }
 
   hit(): void {
-    this.sizeTarget = 0.45;
+    this.sizeTarget = 0.35;
     this.wobbleVel -= 7;
     this.boltT = 0.25;
     for (const b of this.bolts) b.visible = true;
@@ -457,7 +457,7 @@ export class StormVisual {
 
   update(time: number, dt: number): void {
     const r = this.rain.userData.r as number;
-    this.size += (this.sizeTarget - this.size) * (1 - Math.exp(-5 * dt));
+    this.size += (this.sizeTarget - this.size) * (1 - Math.exp(-9 * dt));
     this.wobbleVel += (-this.wobble * 90 - this.wobbleVel * 5) * dt;
     this.wobble += this.wobbleVel * dt;
     const breathe = Math.sin(time * 1.6) * 0.03;
@@ -657,5 +657,101 @@ export class Trail {
     }
     this.mesh.geometry.getAttribute('position').needsUpdate = true;
     this.mesh.geometry.getAttribute('color').needsUpdate = true;
+  }
+}
+
+// ---------------------------------------------------------------- lightning
+const boltCore = new MeshBasicMaterial({
+  color: '#fffbe0',
+  transparent: true,
+  depthWrite: false,
+  blending: AdditiveBlending,
+  toneMapped: false,
+  side: DoubleSide,
+});
+const boltGlow = new MeshBasicMaterial({
+  color: '#ffd84a',
+  transparent: true,
+  depthWrite: false,
+  blending: AdditiveBlending,
+  toneMapped: false,
+  side: DoubleSide,
+});
+
+/**
+ * A cartoon lightning bolt from a storm cloud to the number: it shoots down in under 0.1 s,
+ * glows with two soft pulses (no strobing) and fades. Geometry buffers are reused.
+ */
+export class LightningBolt {
+  readonly group = new Group();
+  private segs = 9;
+  private core: Mesh;
+  private glow: Mesh;
+  private t = 1;
+  private pts: Vector3[] = [];
+
+  constructor() {
+    const make = (mat: MeshBasicMaterial) => {
+      const g = new BufferGeometry();
+      const pos = new BufferAttribute(new Float32Array((this.segs + 1) * 2 * 3), 3);
+      pos.setUsage(DynamicDrawUsage);
+      g.setAttribute('position', pos);
+      const idx: number[] = [];
+      for (let i = 0; i < this.segs; i++) {
+        const a = i * 2;
+        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+      g.setIndex(idx);
+      const m = new Mesh(g, mat);
+      m.frustumCulled = false;
+      m.renderOrder = 6;
+      return m;
+    };
+    this.core = make(boltCore);
+    this.glow = make(boltGlow);
+    this.group.add(this.glow, this.core);
+    this.group.visible = false;
+    for (let i = 0; i <= this.segs; i++) this.pts.push(new Vector3());
+  }
+
+  strike(from: Vector3, to: Vector3): void {
+    for (let i = 0; i <= this.segs; i++) {
+      const k = i / this.segs;
+      const jitter = i === 0 || i === this.segs ? 0 : (Math.random() - 0.5) * 1.6;
+      this.pts[i].lerpVectors(from, to, k);
+      this.pts[i].x += jitter;
+      this.pts[i].z += 0.2;
+    }
+    this.write(this.core, 0.12);
+    this.write(this.glow, 0.45);
+    this.t = 0;
+    this.group.visible = true;
+  }
+
+  private write(mesh: Mesh, width: number): void {
+    const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i <= this.segs; i++) {
+      const p = this.pts[i];
+      const w = width * (1 - (i / this.segs) * 0.4);
+      pos.setXYZ(i * 2, p.x - w, p.y, p.z);
+      pos.setXYZ(i * 2 + 1, p.x + w, p.y, p.z);
+    }
+    pos.needsUpdate = true;
+  }
+
+  update(dt: number): void {
+    if (!this.group.visible) return;
+    this.t += dt;
+    const reveal = Math.min(1, this.t / 0.08);
+    const n = Math.max(1, Math.round(reveal * this.segs));
+    this.core.geometry.setDrawRange(0, n * 6);
+    this.glow.geometry.setDrawRange(0, n * 6);
+    // two gentle pulses, then fade out
+    const life = 0.5;
+    const fade = Math.max(0, 1 - this.t / life);
+    const pulse = 0.75 + 0.25 * Math.cos(this.t * Math.PI * 2 * 4);
+    boltCore.opacity = fade * pulse;
+    boltGlow.opacity = fade * pulse * 0.45;
+    if (this.t >= life) this.group.visible = false;
   }
 }

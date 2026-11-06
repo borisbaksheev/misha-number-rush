@@ -3,7 +3,22 @@
 
 const $ = (id: string) => document.getElementById(id)!;
 
-export const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+/**
+ * Resolves on the next animation frame, or after 250 ms if frames are paused (hidden or
+ * throttled page) so loading can never get stuck waiting.
+ */
+export const nextFrame = () =>
+  new Promise<void>((r) => {
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        r();
+      }
+    };
+    requestAnimationFrame(finish);
+    setTimeout(finish, 250);
+  });
 
 export async function frames(n: number): Promise<void> {
   for (let i = 0; i < n; i++) await nextFrame();
