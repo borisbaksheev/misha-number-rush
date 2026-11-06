@@ -249,8 +249,8 @@ export class SkyLogic {
         const k = unitFor(this.value) * (1 + Math.floor(rand() * 3));
         b.k = applyOp(this.value, { kind: 'add', operand: k }).ok ? k : 0;
       }
-      if (Math.abs(dz) > 1.6) continue;
-      if (Math.hypot(b.f.x - this.x, b.f.y - this.y) > 2.0) continue;
+      if (Math.abs(dz) > 1.8) continue;
+      if (Math.hypot(b.f.x - this.x, b.f.y - this.y) > 2.4) continue;
       b.taken = true;
       const op: MathOp | null = b.k ? { kind: 'add', operand: b.k } : null;
       const ch = op ? this.change(op) : null;

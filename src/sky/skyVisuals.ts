@@ -390,6 +390,9 @@ export class StormVisual {
   private wobble = 0;
   private wobbleVel = 0;
   private lids: Mesh[] = [];
+  /** 1 = full size; shrinks after a bump ("it used up its zap"). */
+  size = 1;
+  private sizeTarget = 1;
 
   /** Built at radius 1; scale the group to the storm's radius. */
   constructor() {
@@ -399,9 +402,9 @@ export class StormVisual {
     this.group.add(this.body);
     // face: sleepy eyes with heavy lids and a small wavy mouth
     for (const side of [-1, 1]) {
-      const eye = new Mesh(new SphereGeometry(0.22, 12, 10), eyeWhite);
+      const eye = new Mesh(new SphereGeometry(0.3, 12, 10), eyeWhite);
       eye.scale.set(1, 0.8, 0.5);
-      eye.position.set(side * 0.38 * r, 0.05 * r, 0.9 * r);
+      eye.position.set(side * 0.42 * r, 0.3 * r, 0.82 * r);
       const pupil = new Mesh(new SphereGeometry(0.11, 10, 8), eyeDark);
       pupil.position.set(0, -0.04, 0.1);
       eye.add(pupil);
@@ -413,7 +416,7 @@ export class StormVisual {
       this.group.add(eye);
     }
     const mouth = new Mesh(new TorusGeometry(0.16, 0.035, 6, 16, Math.PI), eyeDark);
-    mouth.position.set(0, -0.32 * r, 0.95 * r);
+    mouth.position.set(0, -0.02 * r, 0.92 * r);
     this.group.add(mouth);
     for (let i = 0; i < 2; i++) {
       const b = new Mesh(boltShape, boltMat);
@@ -441,7 +444,12 @@ export class StormVisual {
     this.rainPos[i * 3 + 2] = (Math.random() - 0.5) * r;
   }
 
+  reset(): void {
+    this.size = this.sizeTarget = 1;
+  }
+
   hit(): void {
+    this.sizeTarget = 0.45;
     this.wobbleVel -= 7;
     this.boltT = 0.25;
     for (const b of this.bolts) b.visible = true;
@@ -449,6 +457,7 @@ export class StormVisual {
 
   update(time: number, dt: number): void {
     const r = this.rain.userData.r as number;
+    this.size += (this.sizeTarget - this.size) * (1 - Math.exp(-5 * dt));
     this.wobbleVel += (-this.wobble * 90 - this.wobbleVel * 5) * dt;
     this.wobble += this.wobbleVel * dt;
     const breathe = Math.sin(time * 1.6) * 0.03;
@@ -476,17 +485,26 @@ export class StormVisual {
 
 // ---------------------------------------------------------------- number bubbles
 const bubbleMat = new MeshPhysicalMaterial({
-  color: '#ffffff',
+  color: '#bfeaff',
   roughness: 0.05,
   metalness: 0,
   clearcoat: 1,
   transparent: true,
-  opacity: 0.32,
+  opacity: 0.42,
   depthWrite: false,
   iridescence: 1,
   iridescenceIOR: 1.3,
 });
-const bubbleText = new MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.3, clearcoat: 1, emissive: '#ffd84a', emissiveIntensity: 0.35 });
+const bubbleText = new MeshPhysicalMaterial({ color: '#ff3d8b', roughness: 0.3, clearcoat: 1, emissive: '#ff3d8b', emissiveIntensity: 0.35 });
+const bubbleGlow = new MeshBasicMaterial({
+  map: haloTexture,
+  color: '#7fe3ff',
+  transparent: true,
+  depthWrite: false,
+  blending: AdditiveBlending,
+  toneMapped: false,
+});
+const bubbleGlowGeo = new PlaneGeometry(3.2, 3.2);
 const bubbleGeo = new SphereGeometry(1, 28, 20);
 const starGeo = (() => {
   const s = new Shape();
@@ -512,10 +530,14 @@ export class BubbleVisual {
   private popT = 0;
   popped = false;
 
+  private glow: Mesh;
+
   constructor() {
     this.sphere = new Mesh(bubbleGeo, bubbleMat);
     this.sphere.renderOrder = 4;
-    this.group.add(this.inner, this.sphere);
+    this.glow = new Mesh(bubbleGlowGeo, bubbleGlow);
+    this.glow.renderOrder = 2;
+    this.group.add(this.glow, this.inner, this.sphere);
   }
 
   setValue(k: number | null): void {
@@ -534,7 +556,8 @@ export class BubbleVisual {
       this.inner.add(m);
     }
     const r = Math.max(1.05, 0.55 + width * 0.32);
-    const h = Math.min(0.75, (r * 1.55) / Math.max(width, 0.01));
+    const h = Math.min(0.85, (r * 1.6) / Math.max(width, 0.01));
+    this.glow.scale.setScalar(r);
     for (const c of this.inner.children) {
       c.position.x *= h;
       c.position.y = -h * 0.5;
@@ -561,7 +584,7 @@ export class BubbleVisual {
     this.inner.position.y = Math.sin(time * 2 + phase) * 0.12;
     if (this.popped) {
       this.popT = Math.max(0, this.popT - dt * 4);
-      this.group.scale.setScalar(1 + (1 - this.popT) * 0.8);
+      this.group.scale.setScalar(1.45 * (1 + (1 - this.popT) * 0.8));
       this.group.visible = this.popT > 0;
     }
   }

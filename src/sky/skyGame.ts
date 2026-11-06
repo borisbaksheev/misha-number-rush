@@ -467,11 +467,15 @@ export class SkyGame implements GameMode, SkyFxHost {
       let v = this.storms.get(s.f.id);
       if (!v) {
         v = this.stormPool.pop() ?? new StormVisual();
+        v.reset();
         this.storms.set(s.f.id, v);
         this.world.add(v.group);
       }
       v.group.position.set(s.f.x, s.f.y + Math.sin(this.time * 0.8 + s.f.id) * 0.3, z(s.f.d));
-      v.group.scale.setScalar(s.f.r);
+      // once it has drifted past the player, puff away before it can fill the camera view
+      const pass = Math.min(1, Math.max(0, (ahead + 6) / 6));
+      v.group.scale.setScalar(s.f.r * v.size * pass);
+      v.group.visible = pass > 0.02;
       v.update(this.time, dt);
     }
     for (const [id, v] of this.storms) {
@@ -496,7 +500,7 @@ export class SkyGame implements GameMode, SkyFxHost {
       }
       v.setValue(b.k);
       v.group.position.set(b.f.x, b.f.y + Math.sin(this.time * 2 + b.f.id) * 0.25, z(b.f.d));
-      if (!v.popped) v.group.scale.setScalar(Math.min(1, (140 - ahead) / 20));
+      if (!v.popped) v.group.scale.setScalar(1.45 * Math.min(1, (140 - ahead) / 20));
       v.update(this.time, dt, b.f.id);
     }
     for (const [id, v] of this.bubbles) {
@@ -621,7 +625,7 @@ export class SkyGame implements GameMode, SkyFxHost {
   private syncCamera(dt: number): void {
     const l = this.logic;
     const speedK = Math.min(1, l.speed / MAX_SKY_SPEED);
-    const desired = this.tmp.set(l.x * 0.82, l.y + 2.7, 8.8 + speedK * 0.6);
+    const desired = this.tmp.set(l.x * 0.85, l.y + 2.3, 7.4 + speedK * 0.6);
     const look = new Vector3(l.x * 0.9, l.y + 1.6, -16);
     let cin = 0;
     if (this.showcaseT > 0) {
