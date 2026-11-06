@@ -252,14 +252,23 @@ export class RaceLogic {
       const nx = dx / d;
       const pen = minD - d;
       this.x -= nx * pen;
-      this.targetX = this.x;
       if (ns > 0) this.s -= ns * pen;
-      // deflect sideways, preferring the side with more room
-      const away = Math.abs(nx) > 0.2 ? -Math.sign(nx) : this.x >= 0 ? -1 : 1;
-      this.vx = away * (8 + this.speed * 0.25);
+      // Glide round the bumper on a side that is actually wide enough to pass. If the rail
+      // blocks the near side, go round the other way, so the number can never get pinned
+      // between a bumper and the rail (even with no steering at all).
+      const bx = this.bumperX(i);
+      const lane = c.laneFor(this.s, this.x);
+      const lo = lane.center - lane.width / 2 + PLAYER_RADIUS;
+      const hi = lane.center + lane.width / 2 - PLAYER_RADIUS;
+      const right = bx + b.r + PLAYER_RADIUS + 0.25;
+      const left = bx - b.r - PLAYER_RADIUS - 0.25;
+      const preferRight = Math.abs(nx) > 0.2 ? nx < 0 : this.x >= 0 ? false : true;
+      const goal = preferRight ? (right <= hi ? right : left) : left >= lo ? left : right;
+      this.targetX = Math.min(hi, Math.max(lo, goal));
+      this.vx = Math.sign(goal - this.x || 1) * (8 + this.speed * 0.25);
       const strength = Math.min(1, (this.speed * Math.max(0.3, ns)) / MAX_SPEED + 0.25);
-      if (ns > 0.2) this.speed *= 0.62;
       if (!this.bumperCooldown.has(i)) {
+        if (ns > 0.2) this.speed *= 0.62; // one soft slowdown per bump, not every frame
         this.events.push({ type: 'bump', index: i, strength });
         this.bumperCooldown.set(i, 0.35);
       }

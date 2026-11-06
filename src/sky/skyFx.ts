@@ -1,10 +1,8 @@
 // Animated maths transformations for Sky Numbers. The value has already changed in SkyLogic;
-// these sequences only show it, reusing the living number characters. Values are exact
-// dyadic numbers, so fractions such as 3.5 appear exactly as they are.
+// these sequences only show it, reusing the living number characters. Whole numbers only.
 import { Object3D, Vector3 } from 'three';
 import type { Sound } from '../audio/sound';
-import { dyadicToWords, formatDyadic, isWhole, toNumber, type Dyadic } from '../math/dyadic';
-import { celebrationLevel, formatNumber, isPowerOfTen, OP_SYMBOL, type MathOp } from '../math/numberMath';
+import { celebrationLevel, equation, formatNumber, isPowerOfTen, numberToWords, type MathOp } from '../math/numberMath';
 import { NumberCharacter } from '../render/numberCharacter';
 import { DIGIT_COLORS, OP_COLORS } from '../render/palette';
 import type { Particles } from '../render/particles';
@@ -44,19 +42,10 @@ const v1 = new Vector3();
 const v2 = new Vector3();
 const FORWARD = new Vector3(0, 0, 1);
 
-/** "7 ÷ 2 = 3.5" with exact values. */
-export function skyEquation(before: Dyadic, op: MathOp, after: Dyadic): string {
-  return `${formatDyadic(before)} ${OP_SYMBOL[op.kind]} ${formatNumber(op.operand)} = ${formatDyadic(after)}`;
-}
 
-/** Show an exact value on a character. */
-export function showValue(char: NumberCharacter, v: Dyadic): void {
-  char.setDisplay(formatDyadic(v), toNumber(v));
-}
-
-/** Digit colours of a number (given as a value or as its display text). */
-export function colorsOf(n: number | string | Dyadic): string[] {
-  const text = typeof n === 'string' ? n : typeof n === 'number' ? formatNumber(n) : formatDyadic(n);
+/** Digit colours of a number. */
+export function colorsOf(n: number): string[] {
+  const text = formatNumber(n);
   const set = new Set<string>();
   for (const ch of text) if (DIGIT_COLORS[ch] && ch !== ',' && ch !== '.') set.add(DIGIT_COLORS[ch]);
   set.add('#ffffff');
@@ -96,21 +85,20 @@ export class SkyFx {
     return out.set(this.h.logic.x + dx, this.h.logic.y + dy, dz);
   }
 
-  private spawn(value: number | Dyadic, step: Actor['step'], scale = 1): NumberCharacter {
-    const char = new NumberCharacter(typeof value === 'number' ? value : 0, scale);
-    if (typeof value !== 'number') showValue(char, value);
+  private spawn(value: number, step: Actor['step'], scale = 1): NumberCharacter {
+    const char = new NumberCharacter(value, scale);
     this.h.scene.add(char.root);
     this.actors.push({ char, age: 0, step });
     return char;
   }
 
   /** Show the new value on the player and the HUD. */
-  private reveal(value: Dyadic): void {
-    showValue(this.h.player, value);
-    this.h.hud.setValueText(formatDyadic(value), dyadicToWords(value), toNumber(value));
+  private reveal(value: number): void {
+    this.h.player.setValue(value);
+    this.h.hud.setValue(value);
   }
 
-  private settle(value: Dyadic, big = false, burst = 40): void {
+  private settle(value: number, big = false, burst = 40): void {
     const h = this.h;
     this.reveal(value);
     h.player.pop(1);
@@ -122,8 +110,8 @@ export class SkyFx {
   }
 
   // ------------------------------------------------------------------ public events
-  portal(op: MathOp, before: Dyadic, after: Dyadic): void {
-    this.h.hud.showEquation(skyEquation(before, op, after));
+  portal(op: MathOp, before: number, after: number): void {
+    this.h.hud.showEquation(equation(before, op, after));
     if (op.kind === 'add') this.mergeIn(op.operand, after, -4.5, 2.4, 0.6);
     else if (op.kind === 'sub') this.separate(op.operand, after);
     else if (op.kind === 'mul') this.multiply(before, op.operand, after);
@@ -131,16 +119,17 @@ export class SkyFx {
     this.after(0.85, () => this.celebrate(before, after));
   }
 
-  bubble(k: number, after: Dyadic, dx: number, dy: number): void {
+  bubble(k: number, after: number, dx: number, dy: number): void {
     this.h.sound.collect();
     this.mergeIn(k, after, -1.5, 0, 0.3, dx, dy, 0.45);
   }
 
   /**
-   * Storm cloud impact: a lightning bolt, a soft thunder, a colourful cartoon explosion, a quick
-   * wobble, then the halving animation (e.g. 7 ÷ 2 = 3.5). No slow motion: flight goes on at once.
+   * Storm cloud impact: a lightning bolt, a soft thunder, a colourful cartoon explosion and a
+   * quick wobble. An even number then splits in half (16 ÷ 2 = 8); an odd number stays as it is.
+   * No slow motion: flight goes on at once.
    */
-  storm(before: Dyadic, after: Dyadic, halved: boolean, cloud: Vector3): void {
+  storm(before: number, after: number, halved: boolean, cloud: Vector3): void {
     const h = this.h;
     const p = this.at(0, h.player.height * 0.5, 0);
     h.lightning(v2.set(cloud.x, cloud.y - 1.2, cloud.z), p);
@@ -156,10 +145,10 @@ export class SkyFx {
     h.player.impulse(-3);
     this.wobblePlayer();
     if (halved) {
-      h.hud.showEquation(skyEquation(before, { kind: 'div', operand: 2 }, after));
+      h.hud.showEquation(equation(before, { kind: 'div', operand: 2 }, after));
       this.split(2, after, 0.2, false);
     } else {
-      h.hud.toast('That is as small as numbers get here!', 2);
+      h.hud.toast(`${formatNumber(before)} is odd, so it stays ${formatNumber(before)}!`, 2);
     }
   }
 
@@ -178,7 +167,7 @@ export class SkyFx {
 
   // ------------------------------------------------------------------ sequences
   /** Addition: a smaller number spirals in and merges. */
-  private mergeIn(k: number, after: Dyadic, startDz: number, startDy: number, dur: number, startDx = 0, fromDy = 0, scale = 0.75): void {
+  private mergeIn(k: number, after: number, startDz: number, startDy: number, dur: number, startDx = 0, fromDy = 0, scale = 0.75): void {
     const h = this.h;
     this.busy = true;
     if (dur > 0.4) h.slowmo(0.5, 0.45);
@@ -195,7 +184,7 @@ export class SkyFx {
         a.char.spin = ang * 1.5;
         a.char.update(dt, { speed: 6, steer: 0, airborne: true, stride: age * 10, flying: true });
         if (t >= 1) {
-          this.settle(after, toNumber(after) >= 1000);
+          this.settle(after, after >= 1000);
           return false;
         }
         return true;
@@ -207,7 +196,7 @@ export class SkyFx {
   }
 
   /** Subtraction: a smaller number separates and floats away waving. */
-  private separate(k: number, after: Dyadic): void {
+  private separate(k: number, after: number): void {
     const h = this.h;
     this.busy = true;
     h.slowmo(0.5, 0.45);
@@ -241,14 +230,14 @@ export class SkyFx {
   }
 
   /** Multiplication: the number duplicates, glows and combines (zeros fly in for ×10, ×100 …). */
-  private multiply(before: Dyadic, k: number, after: Dyadic): void {
+  private multiply(before: number, k: number, after: number): void {
     const h = this.h;
     this.busy = true;
     h.sound.multiply();
     h.particles.shockwave(this.at(0, 1, 0), FORWARD, 6, OP_COLORS.mul, 0.7);
-    const big = toNumber(after) >= 1000;
-    // ×10 on a whole number literally adds zeros; on 3.5 the decimal point moves instead
-    if (isPowerOfTen(k) && isWhole(before)) {
+    const big = after >= 1000;
+    // ×10, ×100 … literally add zeros to the end of the number
+    if (isPowerOfTen(k) && before > 0) {
       h.slowmo(0.45, 0.75);
       const zeros = Math.round(Math.log10(k));
       let arrived = 0;
@@ -309,7 +298,7 @@ export class SkyFx {
   }
 
   /** Division: the number stretches, splits into equal parts, and the extra parts fly off. */
-  private split(k: number, after: Dyadic, delay = 0, slow = true): void {
+  private split(k: number, after: number, delay = 0, slow = true): void {
     const h = this.h;
     this.busy = true;
     if (slow) h.slowmo(0.45, 0.6);
@@ -349,19 +338,16 @@ export class SkyFx {
   }
 
   /** Big numbers get a banner, fireworks, a camera swing and a brighter sky. */
-  private celebrate(beforeExact: Dyadic, afterExact: Dyadic): void {
+  private celebrate(before: number, after: number): void {
     const h = this.h;
-    const before = toNumber(beforeExact);
-    const after = toNumber(afterExact);
-    // milestones (100, 1,000 … one million) only for whole numbers
-    const level = isWhole(afterExact) ? celebrationLevel(before, after) : 0;
+    const level = celebrationLevel(before, after);
     if (level === 0) return;
     const p = this.at(0, 1.2, 0);
     if (level === 1) {
       h.particles.confettiBurst(p, 40, colorsOf(after), 8, 6);
       return;
     }
-    h.hud.showBanner(`${dyadicToWords(afterExact)}!`);
+    h.hud.showBanner(`${numberToWords(after)}!`);
     h.sound.fanfare(level);
     h.showcase(level >= 3 ? 2.2 : 1.6);
     h.slowmo(0.4, level >= 3 ? 1.2 : 0.8);

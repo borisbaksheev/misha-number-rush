@@ -20,15 +20,14 @@ import {
 import type { GameMode, ModeHost, ModeState, Quality } from '../app';
 import type { Sound } from '../audio/sound';
 import type { InputController } from '../game/input';
-import { dyadic, dyadicToWords, formatDyadic, toNumber } from '../math/dyadic';
-import type { MathOp } from '../math/numberMath';
+import { formatNumber, type MathOp } from '../math/numberMath';
 import { seededRandom } from '../math/random';
 import { prewarmGlyphs } from '../render/glyphs';
 import { NumberCharacter } from '../render/numberCharacter';
 import { Particles } from '../render/particles';
 import type { Hud } from '../ui/hud';
 import { frames, nextFrame } from '../ui/loader';
-import { colorsOf, showValue, SkyFx, type SkyFxHost } from './skyFx';
+import { colorsOf, SkyFx, type SkyFxHost } from './skyFx';
 import { CORRIDOR } from './skyCourse';
 import { MAX_SKY_SPEED, SkyLogic, type RowState, type SkyEvent } from './skyLogic';
 import {
@@ -250,11 +249,10 @@ export class SkyGame implements GameMode, SkyFxHost {
       warm.add(v.group);
       this.bubblePool.push(v);
     }
-    // every look a number can have: all digit colours, a fraction, crown, shiny and golden
+    // every look a number can have: all digit colours, crown, shiny and golden
     const looks = [123, 456, 789, 10, 1_000, 123_456, 1_000_000, 0];
     const chars = looks.map((v, i) => {
       const c = new NumberCharacter(v, 0.7);
-      if (i === 3) showValue(c, dyadic(7, 1)); // 3.5
       c.root.position.set(i * 2.4 - 8.4, 10.5, -10);
       c.update(0.016, { speed: 10, steer: 0, airborne: true, stride: 0, flying: true });
       warm.add(c.root);
@@ -312,7 +310,7 @@ export class SkyGame implements GameMode, SkyFxHost {
   private resetFlight(): void {
     this.logic.reset();
     this.fx.reset();
-    showValue(this.player, this.logic.value);
+    this.player.setValue(this.logic.value);
     this.player.spin = this.player.flip = 0;
     this.trail.clear();
     for (const [, list] of this.portals) list.forEach((p) => this.releasePortal(p));
@@ -357,7 +355,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     const l = this.logic;
     const row = l.nextRow();
     const ops = row?.ops?.map((o) => `${o.kind}${o.operand}`).join(',') ?? '-';
-    return `sky ${this.mode} d=${l.d.toFixed(0)} x=${l.x.toFixed(1)} y=${l.y.toFixed(1)} v=${l.speed.toFixed(1)} value=${formatDyadic(l.value)} next=[${ops}] portals=${l.portalsFlown}`;
+    return `sky ${this.mode} d=${l.d.toFixed(0)} x=${l.x.toFixed(1)} y=${l.y.toFixed(1)} v=${l.speed.toFixed(1)} value=${formatNumber(l.value)} next=[${ops}] portals=${l.portalsFlown}`;
   }
 
   // ------------------------------------------------------------------ SkyFxHost
@@ -384,8 +382,7 @@ export class SkyGame implements GameMode, SkyFxHost {
   }
 
   private showHudValue(animate: boolean): void {
-    const v = this.logic.value;
-    this.hud.setValueText(formatDyadic(v), dyadicToWords(v), toNumber(v), animate);
+    this.hud.setValue(this.logic.value, animate);
   }
 
   // ------------------------------------------------------------------ frame
@@ -787,7 +784,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     l.reset(value ?? l.value);
     l.d = d;
     l.update(0.0001, { dx: 0, dy: 0, axisX: 0, axisY: 0 });
-    showValue(this.player, l.value);
+    this.player.setValue(l.value);
     this.showHudValue(false);
   }
 }

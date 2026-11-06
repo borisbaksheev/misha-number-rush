@@ -60,13 +60,12 @@ bubbles, a colourful cloud tunnel, storm clouds, a white cloud canyon and five p
 **Storm clouds** are dark but friendly, and there are 40 % more of them than in the first version
 (5.6 per stretch on average instead of 4, spaced at least 74 units apart and never near a portal
 row, with a free path past every one). Bumping one strikes a cartoon lightning bolt, plays a soft
-thunder, bursts into colourful sparks and smoke, wobbles the number and **always halves it**:
-100 → 50, 16 → 8, 7 → **3.5**, 1 → **0.5** (shown as 7 ÷ 2 = 3.5). Fractions are kept exactly as
-whole ÷ 2ⁿ (no rounding and no floating-point leftovers) down to 1 ÷ 2²⁰; a 2.5 s cooldown means
-one cloud halves only once. Flight continues straight away. The number's size sets the flight
-speed (bigger numbers fly a little faster: 0.5 → 15, 8 → 18, 1,000,000 → 26), so halving also slows
-it slightly. After a fraction, portals offer exact choices such as ×2 (3.5 × 2 = 7). Dividing a whole
-number in a portal still always gives a whole number.
+thunder, bursts into colourful sparks and smoke and wobbles the number. **Even numbers are halved**
+(100 → 50, 16 → 8, 2 → 1, shown as 16 ÷ 2 = 8); **odd numbers stay exactly the same** (7 stays 7,
+1 stays 1). A 2.5 s cooldown means one cloud counts only once, and flight continues straight away.
+Sky Numbers uses whole numbers only: every portal result is a whole number ≥ 1 and division is
+offered only when the number divides exactly. The number's size sets the flight speed (bigger
+numbers fly a little faster: 1 → 17, 8 → 18, 1,000,000 → 26), so halving also slows it slightly.
 Portals gently help the number line up, so a small child can't miss.
 
 ## Racing: what's in the first track
