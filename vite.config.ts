@@ -14,16 +14,26 @@ function buildVersion(): string {
   return `${hash} · ${stamp} UTC`;
 }
 
+const VERSION = buildVersion();
+
 export default defineConfig({
   base: './',
   define: {
-    __APP_VERSION__: JSON.stringify(buildVersion()),
+    __APP_VERSION__: JSON.stringify(VERSION),
   },
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 1500,
   },
   plugins: [
+    {
+      // Always fetched fresh (never precached) so an installed app can notice a newer build.
+      name: 'version-json',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version: VERSION }) });
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
@@ -46,6 +56,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2,json,webmanifest}'],
+        globIgnores: ['version.json'],
+        // a new version takes over open pages immediately (no waiting for every tab to close)
+        clientsClaim: true,
+        skipWaiting: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',

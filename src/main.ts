@@ -86,6 +86,7 @@ function play(id: ModeId): void {
 }
 
 function toMenu(): void {
+  if (reloadPending) return location.reload();
   $('pause').classList.add('hidden');
   app.hud.show(false);
   app.activate('race').toTitle();
@@ -98,6 +99,7 @@ tap('pauseBtn', () => {
   app.sound.click();
   app.active.pause();
   $('pause').classList.remove('hidden');
+  if (reloadPending) location.reload();
 });
 tap('resumeBtn', () => {
   app.sound.click();
@@ -140,7 +142,42 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Offline support (service worker generated at build time).
+// Offline support and automatic updates (service worker generated at build time).
+// iPadOS often *resumes* a Home Screen app instead of reloading it, which skips the browser's
+// own update check, so also check whenever the app comes back to the foreground and every minute.
+let reloadPending = false;
+function reloadWhenSafe(): void {
+  if (app.active.mode === 'playing') reloadPending = true; // don't interrupt a game in progress
+  else location.reload();
+}
+async function checkForUpdate(reg: ServiceWorkerRegistration | undefined): Promise<void> {
+  if (document.hidden) return;
+  try {
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const { version } = (await res.json()) as { version?: string };
+    if (!version || version === __APP_VERSION__) return;
+    $('version').textContent = `v${__APP_VERSION__} → updating to v${version}…`;
+    if (reg) await reg.update();
+    else reloadWhenSafe();
+  } catch {
+    // offline: keep playing the saved version
+  }
+}
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  import('virtual:pwa-register').then(({ registerSW }) => registerSW({ immediate: true })).catch(() => undefined);
+  import('virtual:pwa-register')
+    .then(({ registerSW }) =>
+      registerSW({
+        immediate: true,
+        onNeedReload: reloadWhenSafe,
+        onRegisteredSW(_url, reg) {
+          const check = () => void checkForUpdate(reg);
+          document.addEventListener('visibilitychange', check);
+          window.addEventListener('focus', check);
+          setInterval(check, 60_000);
+          check();
+        },
+      }),
+    )
+    .catch(() => undefined);
 }
