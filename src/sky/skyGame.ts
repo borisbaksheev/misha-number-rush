@@ -13,23 +13,20 @@ import {
   PerspectiveCamera,
   Quaternion,
   Scene,
-  Vector2,
   Vector3,
   type BufferGeometry,
   type WebGLRenderer,
 } from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { QUALITY, type GameMode, type ModeHost, type ModeState, type Quality } from '../app';
+import type { GameMode, ModeHost, ModeState, Quality } from '../app';
 import type { Sound } from '../audio/sound';
 import type { InputController } from '../game/input';
-import { formatNumber } from '../math/numberMath';
+import { formatNumber, type MathOp } from '../math/numberMath';
 import { seededRandom } from '../math/random';
+import { prewarmGlyphs } from '../render/glyphs';
 import { NumberCharacter } from '../render/numberCharacter';
 import { Particles } from '../render/particles';
 import type { Hud } from '../ui/hud';
+import { frames, nextFrame } from '../ui/loader';
 import { colorsOf, SkyFx, type SkyFxHost } from './skyFx';
 import { CORRIDOR } from './skyCourse';
 import { MAX_SKY_SPEED, SkyLogic, type RowState, type SkyEvent } from './skyLogic';
@@ -117,8 +114,6 @@ export class SkyGame implements GameMode, SkyFxHost {
   readonly input: InputController;
   /** Debug/test driver: steers to lane `lane` of every portal row (null = straight on). */
   autopilot: { lane: number | null } | null = null;
-  private composer: EffectComposer | null = null;
-  private bloom: UnrealBloomPass | null = null;
   private hemi: HemisphereLight;
   private sky = skyDome();
   private world = new Group();
@@ -153,6 +148,10 @@ export class SkyGame implements GameMode, SkyFxHost {
   private hintTimer = 0;
   private white = new Color('#ffffff');
   private tmp = new Vector3();
+  private look = new Vector3();
+  private tmp2 = new Vector3();
+  private tint = new Color();
+  private windDir = new Vector3();
 
   constructor(host: ModeHost) {
     this.renderer = host.renderer;
@@ -199,8 +198,80 @@ export class SkyGame implements GameMode, SkyFxHost {
   }
 
   // ------------------------------------------------------------------ GameMode
+  /**
+   * Warm-up before the flight is revealed: on the first visit every kind of object is put on
+   * screen once (portals with each operation, storms, bubbles, every character look, all
+   * effects) so all shaders compile and all geometry is uploaded behind the loading cover.
+   */
+  async prepare(progress: (p: number) => void, first: boolean, toTitle: boolean): Promise<void> {
+    this.resetFlight();
+    this.mode = 'ready';
+    if (first) await this.warmUp(progress);
+    this.resetFlight();
+    this.mode = toTitle ? 'title' : 'ready';
+    progress(1);
+  }
+
+  private async warmUp(progress: (p: number) => void): Promise<void> {
+    prewarmGlyphs();
+    progress(0.15);
+    await nextFrame();
+    const warm = new Group();
+    this.scene.add(warm);
+    const ops: (MathOp | null)[] = [
+      { kind: 'add', operand: 3 },
+      { kind: 'sub', operand: 3 },
+      { kind: 'mul', operand: 10 },
+      { kind: 'div', operand: 2 },
+      null,
+    ];
+    for (let i = 0; i < 12; i++) {
+      const p = new SkyPortal();
+      p.setOp(ops[i % ops.length]);
+      p.setRadius(2.4);
+      p.group.position.set((i % 4) * 5.5 - 8.25, 7 + Math.floor(i / 4) * 2, -18 - Math.floor(i / 4) * 8);
+      warm.add(p.group);
+      this.portalPool.push(p);
+    }
+    for (let i = 0; i < 4; i++) {
+      const v = new StormVisual();
+      v.group.position.set(i * 6 - 9, 4, -30);
+      v.group.scale.setScalar(2);
+      warm.add(v.group);
+      this.stormPool.push(v);
+    }
+    for (let i = 0; i < 8; i++) {
+      const v = new BubbleVisual();
+      v.setValue(i === 0 ? 0 : i);
+      v.group.position.set(i * 2.5 - 9, 12, -14);
+      warm.add(v.group);
+      this.bubblePool.push(v);
+    }
+    // every look a number can have: all digit colours, crown, shiny and golden
+    const looks = [123, 456, 789, 10, 1_000, 123_456, 1_000_000, 0];
+    const chars = looks.map((v, i) => {
+      const c = new NumberCharacter(v, 0.7);
+      c.root.position.set(i * 2.4 - 8.4, 10.5, -10);
+      c.update(0.016, { speed: 10, steer: 0, airborne: true, stride: 0, flying: true });
+      warm.add(c.root);
+      return c;
+    });
+    this.particles.showAllForWarmup(this.tmp.set(0, 9, -8));
+    progress(0.35);
+    await nextFrame();
+    await this.renderer.compileAsync(this.scene, this.camera);
+    progress(0.7);
+    await frames(3); // draw it all once so geometry and textures are uploaded to the GPU
+    for (const c of chars) c.detach();
+    this.scene.remove(warm);
+    this.particles.clear();
+    progress(0.85);
+    await frames(1);
+  }
+
   start(): void {
-    this.restart();
+    if (this.mode !== 'ready') this.resetFlight();
+    this.mode = 'playing';
     this.sound.unlock();
     this.hud.clearMessages();
     this.hud.show(true);
@@ -222,6 +293,18 @@ export class SkyGame implements GameMode, SkyFxHost {
   }
 
   restart(): void {
+    this.resetFlight();
+    this.mode = 'playing';
+  }
+
+  toTitle(): void {
+    this.resetFlight();
+    this.autopilot = null;
+    this.mode = 'title';
+  }
+
+  /** Back to the start of the flight with the camera already in its resting pose. */
+  private resetFlight(): void {
     this.logic.reset();
     this.fx.reset();
     this.player.setValue(this.logic.value);
@@ -233,34 +316,22 @@ export class SkyGame implements GameMode, SkyFxHost {
     this.storms.clear();
     for (const [, v] of this.bubbles) this.releaseBubble(v);
     this.bubbles.clear();
+    this.particles.clear();
     this.hud.setValue(this.logic.value, false);
     this.hud.setTeam('');
     this.hud.setPill('0 m');
     this.input.reset();
-    this.camPos.set(0, this.logic.y + 3, 10);
-    this.camLook.set(0, this.logic.y, -10);
-    this.mode = 'playing';
+    this.slowTimer = 0;
+    this.slowFactor = 1;
+    this.timeScale = 1;
+    this.shakeAmt = 0;
+    this.showcaseT = 0;
+    this.flashAmt = 0;
+    this.snapCamera();
   }
 
-  toTitle(): void {
-    this.restart();
-    this.autopilot = null;
-    this.mode = 'title';
-  }
-
-  applyQuality(quality: Quality): void {
-    const q = QUALITY[quality];
-    if (q.bloom && !this.composer) {
-      this.composer = new EffectComposer(this.renderer);
-      this.composer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloom = new UnrealBloomPass(new Vector2(256, 256), 0.25, 0.5, 0.93);
-      this.composer.addPass(this.bloom);
-      this.composer.addPass(new OutputPass());
-    } else if (!q.bloom && this.composer) {
-      this.composer.dispose();
-      this.composer = null;
-      this.bloom = null;
-    }
+  /** Sky Numbers draws without bloom: over bright white clouds it only washed the picture out. */
+  applyQuality(_quality: Quality): void {
     this.resize(this.width, this.height);
   }
 
@@ -272,13 +343,8 @@ export class SkyGame implements GameMode, SkyFxHost {
     const hFov = 70;
     const vFov = (2 * Math.atan(Math.tan((hFov * Math.PI) / 360) / aspect) * 180) / Math.PI;
     this.baseFov = Math.min(80, Math.max(55, vFov));
-    this.camera.fov = this.baseFov;
+    this.camera.fov = this.baseFov + this.speedFov();
     this.camera.updateProjectionMatrix();
-    if (this.composer) {
-      this.composer.setPixelRatio(this.renderer.getPixelRatio());
-      this.composer.setSize(w, h);
-      this.bloom?.resolution.set(w / 2, h / 2);
-    }
     this.particles.setScale(h * this.renderer.getPixelRatio(), this.baseFov);
   }
 
@@ -339,8 +405,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     this.sound.tick(Math.min(1, this.logic.speed / MAX_SKY_SPEED) * 0.8, this.mode === 'playing');
     this.particles.update(gdt, this.camera);
 
-    if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
   }
 
   private drive(input: { dx: number; dy: number }): void {
@@ -576,7 +641,7 @@ export class SkyGame implements GameMode, SkyFxHost {
       for (const p of this.chunk(c)) near.add(p.x, p.y, -(p.d - d), p.s, p.sy, p.rot, p.color);
     }
     // colourful cloud tunnels and white cloud canyons
-    const tint = new Color();
+    const tint = this.tint;
     for (const sc of this.logic.scenery) {
       if (sc.from - d > VIEW_AHEAD || sc.to - d < -VIEW_BEHIND) continue;
       if (sc.kind === 'tunnel') {
@@ -622,17 +687,42 @@ export class SkyGame implements GameMode, SkyFxHost {
   }
 
   // ------------------------------------------------------------------ camera & ambience
-  private syncCamera(dt: number): void {
+  private speedFov(): number {
+    return Math.min(1, this.logic.speed / MAX_SKY_SPEED) * 6;
+  }
+
+  /** Where the chase camera wants to be (and look) for the current flight state. */
+  private restPose(): void {
     const l = this.logic;
     const speedK = Math.min(1, l.speed / MAX_SKY_SPEED);
-    const desired = this.tmp.set(l.x * 0.85, l.y + 2.3, 7.4 + speedK * 0.6);
-    const look = new Vector3(l.x * 0.9, l.y + 1.6, -16);
+    this.tmp.set(l.x * 0.85, l.y + 2.3, 7.4 + speedK * 0.6);
+    this.look.set(l.x * 0.9, l.y + 1.6, -16);
+  }
+
+  /** Put the camera exactly at rest so the first visible frame never sweeps or zooms. */
+  private snapCamera(): void {
+    this.restPose();
+    this.camPos.copy(this.tmp);
+    this.camLook.copy(this.look);
+    this.camera.position.copy(this.camPos);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(this.camLook);
+    this.camera.fov = this.baseFov + this.speedFov();
+    this.camera.updateProjectionMatrix();
+    this.sky.position.copy(this.camera.position);
+  }
+
+  private syncCamera(dt: number): void {
+    const l = this.logic;
+    this.restPose();
+    const desired = this.tmp;
+    const look = this.look;
     let cin = 0;
     if (this.showcaseT > 0) {
       this.showcaseT = Math.max(0, this.showcaseT - dt);
       cin = Math.sin((1 - this.showcaseT / this.showcaseDur) * Math.PI);
-      desired.lerp(new Vector3(l.x + this.showcaseSide * 6, l.y + 1.6, -4.5), cin);
-      look.lerp(new Vector3(l.x, l.y + 0.3, 0), cin);
+      desired.lerp(this.tmp2.set(l.x + this.showcaseSide * 6, l.y + 1.6, -4.5), cin);
+      look.lerp(this.tmp2.set(l.x, l.y + 0.3, 0), cin);
     }
     if (this.mode === 'title') {
       const a = this.time * 0.3;
@@ -650,7 +740,7 @@ export class SkyGame implements GameMode, SkyFxHost {
     );
     this.camera.up.set(-l.vx * 0.012, 1, 0).normalize();
     this.camera.lookAt(this.camLook);
-    const fov = this.baseFov + speedK * 6 - cin * 8;
+    const fov = this.baseFov + this.speedFov() - cin * 8;
     if (Math.abs(this.camera.fov - fov) > 0.01) {
       this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-4 * dt));
       this.camera.updateProjectionMatrix();
@@ -665,11 +755,11 @@ export class SkyGame implements GameMode, SkyFxHost {
     // wind sparkles rushing past give a feeling of speed
     if (this.mode === 'playing' && Math.random() < gdt * 18) {
       const p = this.tmp.set(l.x + (Math.random() - 0.5) * 24, l.y + (Math.random() - 0.5) * 14, -40 - Math.random() * 20);
-      this.particles.burst(p, { count: 1, colors: ['#ffffff'], speed: 0, size: 0.25, life: 2.2, gravity: 0, drag: 0, star: false, dir: new Vector3(0, 0, l.speed * 1.4) });
+      this.particles.burst(p, { count: 1, colors: ['#ffffff'], speed: 0, size: 0.25, life: 2.2, gravity: 0, drag: 0, star: false, dir: this.windDir.set(0, 0, l.speed * 1.4) });
     }
     if (this.player.tier >= 2 && Math.random() < gdt * 20) {
       const p = this.tmp.set(l.x + (Math.random() - 0.5) * this.player.width, l.y + (Math.random() - 0.5) * this.player.height, 0.3);
-      this.particles.burst(p, { count: 1, colors: this.player.tier >= 3 ? ['#ffd75e', '#fff3b0'] : ['#ffffff', '#b9f3ff'], speed: 0.5, size: 0.35, life: 0.8, gravity: 0, dir: new Vector3(0, 0, l.speed * 0.6) });
+      this.particles.burst(p, { count: 1, colors: this.player.tier >= 3 ? ['#ffd75e', '#fff3b0'] : ['#ffffff', '#b9f3ff'], speed: 0.5, size: 0.35, life: 0.8, gravity: 0, dir: this.windDir.set(0, 0, l.speed * 0.6) });
     }
   }
 

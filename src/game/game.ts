@@ -2,6 +2,7 @@
 import {
   Color,
   DirectionalLight,
+  Group,
   HemisphereLight,
   Matrix4,
   Object3D,
@@ -21,11 +22,13 @@ import { QUALITY } from '../app';
 import { formatNumber } from '../math/numberMath';
 import { buildEnvironment, SUN_DIR, type EnvironmentVisual } from '../render/environment';
 import { BumperVisual, PadVisual, Portal } from '../render/items';
+import { prewarmGlyphs } from '../render/glyphs';
 import { NumberCharacter } from '../render/numberCharacter';
 import { SKY } from '../render/palette';
 import { Particles } from '../render/particles';
 import { buildTrack, type TrackVisual } from '../render/trackMesh';
 import type { Hud } from '../ui/hud';
+import { frames, nextFrame } from '../ui/loader';
 import { CameraRig } from './cameraRig';
 import { Course, inSpan, type MathItem } from './course';
 import type { InputController } from './input';
@@ -214,6 +217,44 @@ export class Game implements FxHost, GameMode {
     const p = this.worldPoint(item.s, lane.center, 3, new Vector3());
     const colors = ['#ffffff', '#ffe066', '#ff7ad9', '#3ff0ff'];
     this.particles.burst(p, { count: 30, colors, speed: 9, size: 0.42, radius: 2.5 });
+  }
+
+  // ------------------------------------------------------------------ warm-up
+  /**
+   * Compile every shader and upload every mesh behind the loading cover: the whole track is
+   * already in the scene, plus one character of every look and every particle effect.
+   */
+  async prepare(progress: (p: number) => void, first: boolean, toTitle: boolean): Promise<void> {
+    if (first) {
+      prewarmGlyphs();
+      progress(0.2);
+      await nextFrame();
+      const warm = new Group();
+      this.scene.add(warm);
+      const looks = [123, 456, 789, 10, 1_000, 123_456, 1_000_000, 0];
+      const chars = looks.map((v, i) => {
+        const c = new NumberCharacter(v, 0.6);
+        this.place(c.root, 3 + (i % 4) * 1.5, i < 4 ? -2.5 : 2.5, 0);
+        c.update(0.016, { speed: 10, steer: 0, airborne: false, stride: 0 });
+        warm.add(c.root);
+        return c;
+      });
+      this.particles.showAllForWarmup(this.worldPoint(4, 0, 1.5, this.tmp));
+      progress(0.4);
+      await nextFrame();
+      await this.renderer.compileAsync(this.scene, this.rig.camera);
+      progress(0.75);
+      await frames(3); // draw once: uploads geometry, textures and the shadow map
+      for (const c of chars) c.detach();
+      this.scene.remove(warm);
+      this.particles.clear();
+    }
+    if (toTitle) this.toTitle();
+    else {
+      this.restart();
+      this.mode = 'ready';
+    }
+    progress(1);
   }
 
   // ------------------------------------------------------------------ flow

@@ -85,6 +85,26 @@ From lap 2 the forks offer **×2 / ×10**, so you can grow 100 → 1,000 → …
 All maths lives in `src/math` and is independent of rendering. The character always shows the
 team's real value; animations only visualise results that the maths engine already computed.
 
+## Smooth start-up (iPad)
+
+Before a mode is shown, a sky-blue loading cover stays up while the game warms up: every glyph is
+built, object pools are filled, one of every material (portals, storms, bubbles, every number
+look, all effects) is drawn once, all shaders are compiled (`compileAsync`) and a few frames are
+rendered so geometry and textures are on the GPU. On the first visit the real frame time is
+measured behind the cover and the quality level is chosen *before* play. During play the
+resolution never changes (that used to flash the screen); a long slowdown only switches off bloom
+and lowers the resolution at the next start. Sky Numbers never uses bloom (it washed out the white
+clouds). Touch devices start at medium quality.
+
+**Measuring start-up on the iPad:** open
+`https://borisbaksheev.github.io/misha-number-rush/?perf` in Safari. A small panel (bottom left)
+shows fps, quality and shader count, and 10 s after a mode starts a start-up summary: warm-up time,
+frames slower than 33 ms / 50 ms, the slowest frame in the first second and how many shaders
+compiled during play (should be 0). Check a first launch (fresh page), a repeat launch (Main menu →
+Sky Numbers again) and a return from the background (Home, reopen, Keep playing). For deeper
+analysis, enable *Settings → Apps → Safari → Advanced → Web Inspector* on the iPad, connect it to
+the Mac and use Safari's *Develop → [iPad] → Timelines*.
+
 ## Run locally
 
 Requires Node.js 20+ (developed with Node 24).

@@ -119,3 +119,9 @@ export function layoutText(text: string, style: GlyphStyle = CHARACTER_STYLE, ga
   for (const it of items) it.x -= width / 2;
   return { items, width };
 }
+
+/** Build every glyph the game shows up front so no geometry is generated mid-play. */
+export function prewarmGlyphs(): void {
+  for (const ch of '0123456789,') glyph(ch, CHARACTER_STYLE);
+  for (const ch of '0123456789,+−×÷?JOINZ') glyph(ch, SIGN_STYLE);
+}

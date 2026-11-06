@@ -144,6 +144,11 @@ class PointPool {
     this.shape[i] = star ? 1 : 0;
   }
 
+  clear(): void {
+    this.life.fill(0);
+    this.update(0);
+  }
+
   update(dt: number) {
     for (let i = 0; i < this.n; i++) {
       if (this.life[i] <= 0) {
@@ -168,6 +173,8 @@ class PointPool {
   }
 }
 
+const Z_AXIS = new Vector3(0, 0, 1);
+
 interface Confetto {
   life: number;
   pos: Vector3;
@@ -189,6 +196,7 @@ export class Particles {
   private rings: { mesh: Mesh; life: number; max: number; size: number }[] = [];
   private tmpV = new Vector3();
   private tmpV2 = new Vector3();
+  private tmpV3 = new Vector3();
   private tmpC = new Color();
   private m4 = new Matrix4();
   private q = new Quaternion();
@@ -235,6 +243,38 @@ export class Particles {
     }
   }
 
+  /** Remove every live effect (used after warm-up so nothing from it is ever seen). */
+  clear(): void {
+    this.glow.clear();
+    this.dust.clear();
+    const zero = new Matrix4().makeScale(0, 0, 0);
+    this.confettoData.forEach((c, i) => {
+      c.life = 0;
+      this.confetti.setMatrixAt(i, zero);
+    });
+    this.confetti.instanceMatrix.needsUpdate = true;
+    this.streakData.forEach((s, i) => {
+      s.life = 0;
+      this.streaks.setMatrixAt(i, zero);
+    });
+    this.streaks.instanceMatrix.needsUpdate = true;
+    for (const r of this.rings) {
+      r.life = 0;
+      r.mesh.visible = false;
+    }
+  }
+
+  /** Make every effect mesh drawable once so its shader compiles during warm-up. */
+  showAllForWarmup(at: Vector3): void {
+    this.burst(at, { count: 6, colors: ['#ffffff'] });
+    this.puff(at, 6);
+    this.confettiBurst(at, 6, ['#ffffff']);
+    for (const r of this.rings) {
+      r.mesh.position.copy(at);
+      r.mesh.visible = true;
+    }
+  }
+
   setScale(viewportHeight: number, fovDeg: number): void {
     const s = viewportHeight / (2 * Math.tan((fovDeg * Math.PI) / 360));
     this.glow.material.uniforms.scale.value = s;
@@ -249,7 +289,7 @@ export class Particles {
       if (o.dir) dir.add(o.dir);
       dir.y += o.up ?? 0;
       const p = this.tmpV2.copy(at);
-      if (o.radius) p.add(this.randomDir(new Vector3()).multiplyScalar(o.radius * Math.random()));
+      if (o.radius) p.add(this.randomDir(this.tmpV3).multiplyScalar(o.radius * Math.random()));
       this.tmpC.set(o.colors[i % o.colors.length]);
       this.glow.emit(p, dir, this.tmpC, (o.size ?? 0.5) * (0.6 + Math.random() * 0.8), (o.life ?? 0.9) * (0.6 + Math.random() * 0.6), o.gravity ?? 4, o.drag ?? 1.5, o.star ?? true);
     }
@@ -287,7 +327,7 @@ export class Particles {
     r.max = life;
     r.size = size;
     r.mesh.position.copy(at);
-    r.mesh.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), normal);
+    r.mesh.quaternion.setFromUnitVectors(Z_AXIS, normal);
     (r.mesh.material as MeshBasicMaterial).color.set(color);
     r.mesh.visible = true;
   }
