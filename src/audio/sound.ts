@@ -325,6 +325,32 @@ export class Sound {
     [0, 4, 7].forEach((n, i) => this.bell(NOTE(79 + n), t + 0.1 + i * 0.06, 0.4, 0.1));
   }
 
+  /** Picking up a number bubble: a light bubbly bling. */
+  collect(): void {
+    const t = this.now;
+    if (t === null) return;
+    this.tone(900, t, 0.08, { type: 'sine', gain: 0.18, slide: 1500 });
+    this.bell(NOTE(84), t + 0.05, 0.5, 0.12);
+    this.bell(NOTE(91), t + 0.12, 0.5, 0.1);
+  }
+
+  /** Bumping a storm cloud: a soft puff and a far-away, quiet rumble (never startling). */
+  storm(): void {
+    const t = this.now;
+    if (t === null) return;
+    this.noiseBurst(t, 0.35, 0.12, 1200, 300, 'lowpass');
+    this.noiseBurst(t + 0.05, 1.4, 0.07, 160, 60, 'lowpass');
+    this.tone(70, t + 0.05, 1.0, { type: 'sine', gain: 0.12, slide: 45 });
+    this.tone(520, t, 0.25, { type: 'triangle', gain: 0.08, slide: 260 });
+  }
+
+  /** Swoosh when flying through a portal. */
+  whoosh(): void {
+    const t = this.now;
+    if (t === null) return;
+    this.noiseBurst(t, 0.45, 0.16, 500, 3500);
+  }
+
   buddyHello(): void {
     const t = this.now;
     if (t === null) return;

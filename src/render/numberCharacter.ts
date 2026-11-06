@@ -137,6 +137,8 @@ export interface MotionState {
   airborne: boolean;
   /** Distance travelled; drives the walk cycle. */
   stride: number;
+  /** Flying pose (Sky Numbers): arms spread like wings, feet trailing, happy face. */
+  flying?: boolean;
 }
 
 export class NumberCharacter {
@@ -371,6 +373,12 @@ export class NumberCharacter {
 
     // feet
     for (const f of this.feet) {
+      if (m.flying) {
+        const kick = Math.sin(t * 5 + f.phase) * 0.05;
+        f.mesh.position.set(f.baseX * 0.8, 0.12 + kick, 0.16);
+        f.mesh.rotation.x = 0.9;
+        continue;
+      }
       const ph = m.stride * 0.9 + f.phase;
       const lift = m.airborne ? 0.08 : Math.max(0, Math.sin(ph)) * 0.16 * run;
       f.mesh.position.set(f.baseX, 0.09 + lift, m.airborne ? -0.05 : -Math.cos(ph) * 0.18 * run);
@@ -382,6 +390,11 @@ export class NumberCharacter {
       let swing = Math.sin(m.stride * 0.9 + (side > 0 ? 0 : Math.PI)) * 0.7 * run;
       let raise = 0.25 + Math.sin(t * 2 + side) * 0.05;
       if (m.airborne) raise = 2.2;
+      if (m.flying) {
+        // wings: arms stretched out sideways with a gentle flap
+        raise = 1.45 + Math.sin(t * 5.5 + side) * 0.22;
+        swing = -0.35;
+      }
       if (this.wave > 0) {
         raise = 2.6;
         swing = Math.sin(t * 16 + side) * 0.35;
@@ -404,7 +417,7 @@ export class NumberCharacter {
       this.expressionTimer -= dt;
       if (this.expressionTimer <= 0) this.expression = 'smile';
     }
-    const e = m.airborne && this.expression === 'smile' ? 'oh' : this.expression;
+    const e = m.airborne && !m.flying && this.expression === 'smile' ? 'oh' : this.expression;
     this.mouths.smile.visible = e === 'smile';
     this.mouths.grin.visible = e === 'grin';
     this.mouths.oh.visible = e === 'oh';

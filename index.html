@@ -36,7 +36,7 @@
       <div id="toast"></div>
       <div id="hint">
         <div class="finger"></div>
-        <div>Hold to run · Slide to steer</div>
+        <div id="hintText">Hold to run · Slide to steer</div>
       </div>
     </div>
 
@@ -47,8 +47,29 @@
         <div class="logo-big rush"><span>R</span><span>u</span><span>s</span><span>h</span><span>!</span></div>
       </div>
       <div class="bottom">
-        <button class="big-btn" id="playBtn">Play</button>
-        <div class="how">Hold your finger to run · Slide to steer</div>
+        <div class="modes">
+          <button class="mode-btn race" id="raceBtn" aria-label="Racing">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M10 58 L26 10 L38 10 L54 58 Z" fill="#5850d8" />
+              <path d="M30 16 h4 v8 h-4z M30 30 h4 v9 h-4z M29 45 h6 v10 h-6z" fill="#fff" />
+              <path d="M40 6 v24" stroke="#2c1840" stroke-width="3" stroke-linecap="round" />
+              <path d="M40 6 h16 v12 h-16z" fill="#fff" stroke="#2c1840" stroke-width="2" />
+              <path d="M40 6 h4 v4 h-4z M48 6 h4 v4 h-4z M44 10 h4 v4 h-4z M52 10 h4 v4 h-4z M40 14 h4 v4 h-4z M48 14 h4 v4 h-4z" fill="#2c1840" />
+            </svg>
+            <span class="mode-name">Racing</span>
+            <span class="mode-how">Hold &amp; slide to run</span>
+          </button>
+          <button class="mode-btn sky" id="skyBtn" aria-label="Sky Numbers">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="46" cy="16" r="9" fill="#ffd84a" />
+              <path d="M14 46 a10 10 0 0 1 4-19 a13 13 0 0 1 25-2 a9 9 0 0 1 9 14 a7 7 0 0 1-2 7z" fill="#fff" stroke="#2c1840" stroke-width="2.5" stroke-linejoin="round" />
+              <circle cx="27" cy="37" r="7" fill="none" stroke="#a35cff" stroke-width="4" />
+              <path d="M40 34 h8 M44 30 v8" stroke="#2fd98a" stroke-width="4" stroke-linecap="round" />
+            </svg>
+            <span class="mode-name">Sky Numbers</span>
+            <span class="mode-how">Slide to fly</span>
+          </button>
+        </div>
         <div class="toggles">
           <button class="toggle" id="sfxToggle" data-on="true">Sounds</button>
           <button class="toggle" id="musicToggle" data-on="true">Music</button>
@@ -63,6 +84,7 @@
         <div class="title">Paused</div>
         <button class="big-btn" id="resumeBtn">Keep playing</button>
         <button class="mid-btn" id="restartBtn">Start again</button>
+        <button class="mid-btn" id="menuBtn">Main menu</button>
         <div class="toggles">
           <button class="toggle" id="sfxToggle2" data-on="true">Sounds</button>
           <button class="toggle" id="musicToggle2" data-on="true">Music</button>

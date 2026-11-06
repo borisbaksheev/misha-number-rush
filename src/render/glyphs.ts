@@ -1,5 +1,5 @@
 // Extruded, rounded 3D glyphs built from the bundled Fredoka Bold outline font.
-import { BufferGeometry, ExtrudeGeometry } from 'three';
+import { Box3, BufferGeometry, ExtrudeGeometry, Shape } from 'three';
 import { Font, type FontData } from 'three/examples/jsm/loaders/FontLoader.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import fontJson from '../assets/fredoka-bold.typeface.json';
@@ -38,12 +38,40 @@ const DIGIT_EM = (() => {
 
 const cache = new Map<string, Glyph>();
 
+/**
+ * The font's "÷" has small dots hugging the bar and reads like "+" at gate size.
+ * Draw a clearer one: a rounded bar with two big, well separated dots, sized like "+".
+ */
+function divideShapes(): Shape[] {
+  const plus = new ExtrudeGeometry(font.generateShapes('+', DIGIT_EM), { depth: 0.01, bevelEnabled: false });
+  const bb = new Box3().setFromBufferAttribute(plus.getAttribute('position') as never);
+  plus.dispose();
+  const cx = (bb.min.x + bb.max.x) / 2;
+  const cy = (bb.min.y + bb.max.y) / 2;
+  const w = (bb.max.x - bb.min.x) * 1.05;
+  const bar = 0.15;
+  const r = bar / 2;
+  const s = new Shape();
+  s.moveTo(cx - w / 2 + r, cy - r);
+  s.lineTo(cx + w / 2 - r, cy - r);
+  s.absarc(cx + w / 2 - r, cy, r, -Math.PI / 2, Math.PI / 2, false);
+  s.lineTo(cx - w / 2 + r, cy + r);
+  s.absarc(cx - w / 2 + r, cy, r, Math.PI / 2, (3 * Math.PI) / 2, false);
+  const dot = (y: number) => {
+    const d = new Shape();
+    d.absarc(cx, y, 0.105, 0, Math.PI * 2, false);
+    return d;
+  };
+  const gap = 0.3;
+  return [s, dot(cy + gap), dot(cy - gap)];
+}
+
 /** A glyph whose digit-height is 1 with the baseline at y = 0, horizontally centred. */
 export function glyph(ch: string, style: GlyphStyle = CHARACTER_STYLE): Glyph {
   const key = `${ch}|${style.depth}|${style.bevel}|${style.curveSegments}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const shapes = font.generateShapes(ch, DIGIT_EM);
+  const shapes = ch === '÷' ? divideShapes() : font.generateShapes(ch, DIGIT_EM);
   let geo: BufferGeometry = new ExtrudeGeometry(shapes, {
     depth: style.depth,
     bevelEnabled: true,

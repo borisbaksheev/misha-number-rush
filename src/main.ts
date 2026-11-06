@@ -2,7 +2,9 @@ import '@fontsource/fredoka/latin-500.css';
 import '@fontsource/fredoka/latin-600.css';
 import '@fontsource/fredoka/latin-700.css';
 import './ui/styles.css';
+import { App, type ModeId } from './app';
 import { Game } from './game/game';
+import { SkyGame } from './sky/skyGame';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -22,9 +24,13 @@ function showProblem(title: string, text: string): void {
 }
 $('reloadBtn').addEventListener('pointerup', () => location.reload());
 
-let game: Game;
+let app: App;
 try {
-  game = new Game($('game'));
+  app = new App($('game'));
+  app.register('race', (host) => new Game(host));
+  app.register('sky', (host) => new SkyGame(host));
+  app.activate('race'); // the racing track is the menu backdrop
+  app.run();
 } catch (err) {
   console.error(err);
   $('loading').textContent = '';
@@ -35,19 +41,22 @@ try {
   );
   throw err;
 }
-(window as unknown as { __game: Game }).__game = game;
+const w = window as unknown as { __app: App; __game: Game; __sky: () => SkyGame };
+w.__app = app;
+w.__game = app.mode('race') as Game;
+w.__sky = () => app.mode('sky') as SkyGame;
 $('loading').classList.add('hidden');
 
 // iPad Safari can drop the WebGL context when memory runs low; offer a clean restart.
-game.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+app.renderer.domElement.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
-  game.pause();
+  app.active.pause();
   showProblem('Taking a little rest', 'The picture needs a quick refresh. Tap the button to keep playing.');
 });
 
 function syncToggles(): void {
-  for (const id of ['sfxToggle', 'sfxToggle2']) $(id).dataset.on = String(game.sound.sfxOn);
-  for (const id of ['musicToggle', 'musicToggle2']) $(id).dataset.on = String(game.sound.musicOn);
+  for (const id of ['sfxToggle', 'sfxToggle2']) $(id).dataset.on = String(app.sound.sfxOn);
+  for (const id of ['musicToggle', 'musicToggle2']) $(id).dataset.on = String(app.sound.musicOn);
 }
 syncToggles();
 
@@ -57,47 +66,76 @@ const tap = (id: string, fn: () => void) =>
     fn();
   });
 
-tap('playBtn', () => {
+function play(id: ModeId): void {
+  app.sound.unlock();
+  if (id === 'sky' && !app.hasMode('sky')) {
+    // the first visit builds the sky; let "Getting the sky ready…" paint first
+    $('loading').textContent = 'Getting the sky ready…';
+    $('loading').classList.remove('hidden');
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        $('loading').classList.add('hidden');
+        $('start').classList.add('hidden');
+        app.activate(id).start();
+      }, 30),
+    );
+    return;
+  }
   $('start').classList.add('hidden');
-  game.start();
-});
+  app.activate(id).start();
+}
+
+function toMenu(): void {
+  $('pause').classList.add('hidden');
+  app.hud.show(false);
+  app.activate('race').toTitle();
+  $('start').classList.remove('hidden');
+}
+
+tap('raceBtn', () => play('race'));
+tap('skyBtn', () => play('sky'));
 tap('pauseBtn', () => {
-  game.sound.click();
-  game.pause();
+  app.sound.click();
+  app.active.pause();
   $('pause').classList.remove('hidden');
 });
 tap('resumeBtn', () => {
-  game.sound.click();
+  app.sound.click();
   $('pause').classList.add('hidden');
-  game.resume();
+  app.active.resume();
 });
 tap('restartBtn', () => {
-  game.sound.click();
+  app.sound.click();
   $('pause').classList.add('hidden');
-  game.restart();
+  app.active.restart();
+});
+tap('menuBtn', () => {
+  app.sound.click();
+  toMenu();
 });
 for (const id of ['sfxToggle', 'sfxToggle2']) {
   tap(id, () => {
-    game.sound.unlock();
-    game.sound.setSfx(!game.sound.sfxOn);
+    app.sound.unlock();
+    app.sound.setSfx(!app.sound.sfxOn);
     syncToggles();
-    game.sound.click();
+    app.sound.click();
   });
 }
 for (const id of ['musicToggle', 'musicToggle2']) {
   tap(id, () => {
-    game.sound.unlock();
-    game.sound.setMusic(!game.sound.musicOn);
+    app.sound.unlock();
+    app.sound.setMusic(!app.sound.musicOn);
     syncToggles();
   });
 }
 // stop UI presses from also driving the character
-for (const id of ['pauseBtn', 'start', 'pause']) $(id).addEventListener('pointerdown', (e) => e.stopPropagation());
+for (const id of ['pauseBtn', 'start', 'pause', 'problem']) $(id).addEventListener('pointerdown', (e) => e.stopPropagation());
 
-// Pause automatically when the app is hidden.
+// Pause automatically when the app is hidden (?nopause turns this off for automated testing).
+const autoPause = !new URLSearchParams(location.search).has('nopause');
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && game.mode === 'playing') {
-    game.pause();
+  if (autoPause && document.hidden && app.active.mode === 'playing') {
+    app.active.pause();
     $('pause').classList.remove('hidden');
   }
 });

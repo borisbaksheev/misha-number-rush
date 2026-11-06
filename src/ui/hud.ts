@@ -15,11 +15,21 @@ export class Hud {
   private bannerText = this.banner.querySelector('.text') as HTMLElement;
   private toastEl = $('toast');
   private hint = $('hint');
+  private hintText = $('hintText');
   private toastTimer = 0;
   private shown = -1;
 
   show(visible: boolean): void {
     this.hud.classList.toggle('hidden', !visible);
+    if (!visible) this.clearMessages();
+  }
+
+  /** Stop any equation, banner or toast that is still animating (e.g. when switching modes). */
+  clearMessages(): void {
+    this.equation.classList.remove('show');
+    this.banner.classList.remove('show');
+    this.toastEl.classList.remove('show');
+    this.setTeam('');
   }
 
   setValue(n: number, animate = true): void {
@@ -32,7 +42,16 @@ export class Hud {
   }
 
   setLap(n: number): void {
-    this.lap.textContent = `Lap ${n}`;
+    this.setPill(`Lap ${n}`);
+  }
+
+  /** Small pill at the top left (lap counter, distance …). */
+  setPill(text: string): void {
+    if (this.lap.textContent !== text) this.lap.textContent = text;
+  }
+
+  setHint(text: string): void {
+    this.hintText.textContent = text;
   }
 
   setTeam(text: string): void {

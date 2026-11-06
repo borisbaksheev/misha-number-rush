@@ -4,62 +4,50 @@ import {
   DirectionalLight,
   HemisphereLight,
   Matrix4,
-  NeutralToneMapping,
   Object3D,
-  PCFShadowMap,
-  PMREMGenerator,
   PointLight,
   Scene,
-  SRGBColorSpace,
   Vector2,
   Vector3,
-  WebGLRenderer,
+  type WebGLRenderer,
 } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { Sound } from '../audio/sound';
+import type { GameMode, ModeHost, ModeState, Quality } from '../app';
+import type { Sound } from '../audio/sound';
+import { QUALITY } from '../app';
 import { formatNumber } from '../math/numberMath';
 import { buildEnvironment, SUN_DIR, type EnvironmentVisual } from '../render/environment';
 import { BumperVisual, PadVisual, Portal } from '../render/items';
-import { NumberCharacter, setCharacterQuality } from '../render/numberCharacter';
+import { NumberCharacter } from '../render/numberCharacter';
 import { SKY } from '../render/palette';
 import { Particles } from '../render/particles';
 import { buildTrack, type TrackVisual } from '../render/trackMesh';
-import { Hud } from '../ui/hud';
+import type { Hud } from '../ui/hud';
 import { CameraRig } from './cameraRig';
 import { Course, inSpan, type MathItem } from './course';
-import { InputController } from './input';
+import type { InputController } from './input';
 import { MAX_SPEED, RaceLogic, type RaceEvent } from './raceLogic';
 import { newFrame } from './trackPath';
 import { Transformations, type FxHost } from './transforms';
 
-export type Quality = 'high' | 'medium' | 'low';
-type Mode = 'title' | 'playing' | 'paused';
-
-const QUALITY: Record<Quality, { dpr: number; bloom: boolean; shadow: number }> = {
-  high: { dpr: 2, bloom: true, shadow: 2048 },
-  medium: { dpr: 1.5, bloom: false, shadow: 2048 },
-  low: { dpr: 1, bloom: false, shadow: 1024 },
-};
-
-export class Game implements FxHost {
+/** The original number racing mode. */
+export class Game implements FxHost, GameMode {
+  readonly id = 'race' as const;
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
   readonly course = new Course();
   readonly logic = new RaceLogic(this.course);
   readonly rig: CameraRig;
   readonly particles = new Particles();
-  readonly sound = new Sound();
-  readonly hud = new Hud();
+  readonly sound: Sound;
+  readonly hud: Hud;
   readonly input: InputController;
   readonly player = new NumberCharacter(2);
   readonly fx: Transformations;
-  mode: Mode = 'title';
-  quality: Quality = 'high';
-  private autoQuality = true;
+  mode: ModeState = 'title';
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;
   private track: TrackVisual;
@@ -71,11 +59,10 @@ export class Game implements FxHost {
   private bumpers: BumperVisual[] = [];
   private pads: PadVisual[] = [];
   private buddies = new Map<string, NumberCharacter>();
-  private frame = newFrame();
+  private tf = newFrame();
   private tmp = new Vector3();
   private m4 = new Matrix4();
   private back = new Vector3();
-  private last = performance.now();
   private time = 0;
   private timeScale = 1;
   private slowTimer = 0;
@@ -86,36 +73,21 @@ export class Game implements FxHost {
   private flashColor = new Color('#ffffff');
   private hintTimer = 0;
   private stride = 0;
-  private fpsAcc = { frames: 0, time: 0, playTime: 0 };
-  private fpsEl = document.getElementById('fps')!;
-  private debug = new URLSearchParams(location.search).has('debug');
-  fps = 60;
+  private width = 1;
+  private height = 1;
   /** Debug/test driver: holds the throttle and optionally steers to a lateral position. */
   autopilot: { lane: number | null } | null = null;
 
-  constructor(private container: HTMLElement) {
-    const params = new URLSearchParams(location.search);
-    const q = params.get('quality');
-    if (q === 'high' || q === 'medium' || q === 'low') {
-      this.quality = q;
-      this.autoQuality = false;
-    }
-    this.renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: false });
-    this.renderer.outputColorSpace = SRGBColorSpace;
-    this.renderer.toneMapping = NeutralToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFShadowMap;
-    container.appendChild(this.renderer.domElement);
-
+  constructor(host: ModeHost) {
+    this.renderer = host.renderer;
+    this.sound = host.sound;
+    this.hud = host.hud;
+    this.input = host.input;
     this.rig = new CameraRig(1);
-    this.input = new InputController(container);
-    this.input.onFirstInput = () => this.sound.unlock();
     this.fx = new Transformations(this);
 
     // lighting
-    const pmrem = new PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = host.envMap;
     this.scene.environmentIntensity = 0.55;
     this.scene.background = SKY.mid.clone();
     this.hemi = new HemisphereLight('#d8eeff', '#ffc9e3', 1.05);
@@ -142,13 +114,7 @@ export class Game implements FxHost {
     this.scene.add(this.env.group, this.track.group, this.particles.group, this.player.root);
     this.buildItems();
 
-    window.addEventListener('resize', this.resize);
-    window.visualViewport?.addEventListener('resize', this.resize);
-    this.applyQuality();
-    this.resize();
     this.hud.setValue(2, false);
-    this.renderer.setAnimationLoop(this.loop);
-    if (this.debug) this.fpsEl.classList.remove('hidden');
   }
 
   // ------------------------------------------------------------------ setup
@@ -186,16 +152,13 @@ export class Game implements FxHost {
     }
   }
 
-  private applyQuality(): void {
-    const q = QUALITY[this.quality];
-    const dpr = Math.min(window.devicePixelRatio || 1, q.dpr);
-    this.renderer.setPixelRatio(dpr);
+  applyQuality(quality: Quality): void {
+    const q = QUALITY[quality];
     this.sun.shadow.mapSize.set(q.shadow, q.shadow);
     if (this.sun.shadow.map) {
       this.sun.shadow.map.dispose();
       this.sun.shadow.map = null as never;
     }
-    setCharacterQuality(this.quality === 'low');
     if (q.bloom && !this.composer) {
       this.composer = new EffectComposer(this.renderer);
       this.composer.addPass(new RenderPass(this.scene, this.rig.camera));
@@ -207,19 +170,12 @@ export class Game implements FxHost {
       this.composer = null;
       this.bloom = null;
     }
-    this.resize();
+    this.resize(this.width, this.height);
   }
 
-  setQuality(q: Quality, auto = false): void {
-    this.quality = q;
-    this.autoQuality = auto;
-    this.applyQuality();
-  }
-
-  private resize = (): void => {
-    const w = this.container.clientWidth || window.innerWidth;
-    const h = this.container.clientHeight || window.innerHeight;
-    this.renderer.setSize(w, h);
+  resize(w: number, h: number): void {
+    this.width = w;
+    this.height = h;
     this.rig.setAspect(w / h);
     if (this.composer) {
       this.composer.setPixelRatio(this.renderer.getPixelRatio());
@@ -227,11 +183,11 @@ export class Game implements FxHost {
       this.bloom?.resolution.set(w / 2, h / 2);
     }
     this.particles.setScale(h * this.renderer.getPixelRatio(), this.rig.baseFov);
-  };
+  }
 
   // ------------------------------------------------------------------ FxHost
   place(obj: Object3D, s: number, x: number, y: number): void {
-    const f = this.course.path.frameAt(s, this.frame);
+    const f = this.course.path.frameAt(s, this.tf);
     this.back.copy(f.tangent).negate();
     this.m4.makeBasis(f.right, f.up, this.back);
     obj.quaternion.setFromRotationMatrix(this.m4);
@@ -264,7 +220,11 @@ export class Game implements FxHost {
   start(): void {
     this.sound.unlock();
     this.mode = 'playing';
+    this.hud.clearMessages();
     this.hud.show(true);
+    this.hud.setLap(this.logic.lap);
+    this.hud.setValue(this.logic.team.leader, false);
+    this.hud.setHint('Hold to run · Slide to steer');
     this.hud.showHint(true);
     this.hintTimer = 0;
     this.sound.click();
@@ -279,7 +239,6 @@ export class Game implements FxHost {
   resume(): void {
     if (this.mode !== 'paused') return;
     this.mode = 'playing';
-    this.last = performance.now();
   }
 
   restart(): void {
@@ -294,16 +253,17 @@ export class Game implements FxHost {
     this.input.reset();
     this.rig.snap();
     this.mode = 'playing';
-    this.last = performance.now();
+  }
+
+  toTitle(): void {
+    this.restart();
+    this.autopilot = null;
+    this.mode = 'title';
   }
 
   // ------------------------------------------------------------------ loop
-  private loop = (): void => {
-    const now = performance.now();
-    let dt = Math.min(0.05, (now - this.last) / 1000);
-    this.last = now;
-    this.trackFps(dt);
-    if (this.mode === 'paused') dt = 0;
+  frame(realDt: number): void {
+    const dt = this.mode === 'paused' ? 0 : realDt;
 
     if (this.slowTimer > 0) {
       this.slowTimer -= dt;
@@ -343,26 +303,6 @@ export class Game implements FxHost {
 
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.rig.camera);
-  };
-
-  private trackFps(dt: number): void {
-    const a = this.fpsAcc;
-    a.frames++;
-    a.time += dt;
-    if (this.mode === 'playing') a.playTime += dt;
-    if (a.time >= 2) {
-      this.fps = a.frames / a.time;
-      a.frames = 0;
-      a.time = 0;
-      if (this.autoQuality && a.playTime > 4 && this.fps < 45 && this.quality !== 'low') {
-        this.setQuality(this.quality === 'high' ? 'medium' : 'low', true);
-        a.playTime = 0;
-      }
-      if (this.debug) {
-        const info = this.renderer.info.render;
-        this.fpsEl.textContent = `${this.fps.toFixed(0)} fps  ${this.quality}\n${info.calls} calls  ${(info.triangles / 1000).toFixed(0)}k tris\ns=${this.logic.s.toFixed(0)} lap ${this.logic.lap}`;
-      }
-    }
   }
 
   private onEvent(e: RaceEvent): void {
@@ -436,7 +376,7 @@ export class Game implements FxHost {
   }
 
   private frameUp(s: number): Vector3 {
-    return this.course.path.frameAt(s, this.frame).up.clone();
+    return this.course.path.frameAt(s, this.tf).up.clone();
   }
 
   private syncPlayer(dt: number): void {
@@ -502,7 +442,7 @@ export class Game implements FxHost {
 
   private syncWorld(gdt: number, dt: number): void {
     const l = this.logic;
-    const f = this.course.path.frameAt(l.s, this.frame);
+    const f = this.course.path.frameAt(l.s, this.tf);
     const target = this.tmp.copy(f.pos).addScaledVector(f.right, l.x).addScaledVector(f.up, Math.max(l.y, -6));
     this.rig.orbit += ((this.mode === 'title' ? 1 : 0) - this.rig.orbit) * (1 - Math.exp(-2.5 * dt));
     this.rig.update(dt, target, f, l.speed, !l.grounded, this.time);
@@ -540,7 +480,7 @@ export class Game implements FxHost {
   /** Testing hook: a short description of the current state. */
   describe(): string {
     const l = this.logic;
-    return `${this.mode} lap=${l.lap} s=${l.s.toFixed(1)} x=${l.x.toFixed(2)} v=${l.speed.toFixed(1)} value=${formatNumber(l.team.leader)} team=${l.team.total()} fps=${this.fps.toFixed(0)}`;
+    return `race ${this.mode} lap=${l.lap} s=${l.s.toFixed(1)} x=${l.x.toFixed(2)} v=${l.speed.toFixed(1)} value=${formatNumber(l.team.leader)} team=${l.team.total()}`;
   }
 
   /** Puts the player on the track at arc length s (title screen and tests). */

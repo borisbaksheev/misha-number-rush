@@ -17,13 +17,14 @@ import {
   SphereGeometry,
   TorusGeometry,
   type Material,
+  type Object3D,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type MathOp, opLabel } from '../math/numberMath';
 import { layoutText, SIGN_STYLE } from './glyphs';
 import { OP_COLORS } from './palette';
 
-const SWIRL_FRAG = /* glsl */ `
+export const SWIRL_FRAG = /* glsl */ `
   uniform float time;
   uniform vec3 color;
   uniform float strength;
@@ -41,7 +42,7 @@ const SWIRL_FRAG = /* glsl */ `
     vec3 col = mix(color, vec3(1.0), swirl * 0.35 + rim * 0.25);
     gl_FragColor = vec4(col, alpha);
   }`;
-const SWIRL_VERT = /* glsl */ `
+export const SWIRL_VERT = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vPos;
   void main() {
@@ -65,6 +66,46 @@ function roundedRect(w: number, h: number, r: number): Shape {
 }
 
 const white = new MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.25, clearcoat: 1 });
+
+/**
+ * A rounded, glossy sign panel with white 3D lettering, centred on its origin.
+ * Shared by racing gates and sky portals.
+ */
+export function buildSign(text: string, panelMat: Material, textH = 1.5, shadows = true): { group: Group; width: number } {
+  const group = new Group();
+  const label = new Group();
+  const { items, width } = layoutText(text, SIGN_STYLE, 0.08);
+  for (const it of items) {
+    const m = new Mesh(it.glyph.geometry, white);
+    m.position.x = it.x;
+    m.castShadow = shadows;
+    label.add(m);
+  }
+  label.scale.setScalar(textH);
+  label.position.set(0, -textH * 0.5, 0.25);
+  const panelW = width * textH + textH * 0.8;
+  const panelGeo = new ExtrudeGeometry(roundedRect(panelW, textH * 1.66, textH * 0.4), {
+    depth: 0.3,
+    bevelEnabled: true,
+    bevelThickness: 0.15,
+    bevelSize: 0.15,
+    bevelSegments: 3,
+  });
+  panelGeo.translate(0, 0, -0.25);
+  const panel = new Mesh(panelGeo, panelMat);
+  panel.castShadow = shadows;
+  panel.userData.ownGeo = true;
+  group.add(panel, label);
+  return { group, width: panelW };
+}
+
+/** Free the panel geometry built by buildSign (glyph geometry is cached and shared). */
+export function disposeSign(holder: Object3D): void {
+  holder.traverse((o) => {
+    if (o.userData.ownGeo) (o as Mesh).geometry.dispose();
+  });
+  holder.clear();
+}
 const sleepyColor = new Color('#b9b3c9');
 
 export type PortalKind = 'gate' | 'join' | 'finale';
@@ -76,7 +117,6 @@ export class Portal {
   private ringMat: MeshPhysicalMaterial;
   private swirl: ShaderMaterial;
   private sign = new Group();
-  private label = new Group();
   private panelMat: MeshPhysicalMaterial;
   private baseColor: Color;
   private pulse = 0;
@@ -168,30 +208,8 @@ export class Portal {
   setLabel(text: string): void {
     if (text === this.labelText) return;
     this.labelText = text;
-    this.sign.clear();
-    this.label = new Group();
-    const { items, width } = layoutText(text, SIGN_STYLE, 0.08);
-    for (const it of items) {
-      const m = new Mesh(it.glyph.geometry, white);
-      m.position.x = it.x;
-      m.castShadow = true;
-      this.label.add(m);
-    }
-    const textH = 1.5;
-    this.label.scale.setScalar(textH);
-    this.label.position.set(0, -textH * 0.5, 0.25);
-    const panelW = width * textH + 1.2;
-    const panelGeo = new ExtrudeGeometry(roundedRect(panelW, textH + 1.0, 0.6), {
-      depth: 0.3,
-      bevelEnabled: true,
-      bevelThickness: 0.15,
-      bevelSize: 0.15,
-      bevelSegments: 3,
-    });
-    panelGeo.translate(0, 0, -0.25);
-    const panel = new Mesh(panelGeo, this.panelMat);
-    panel.castShadow = true;
-    this.sign.add(panel, this.label);
+    disposeSign(this.sign);
+    this.sign.add(buildSign(text, this.panelMat).group);
   }
 
   setOp(op: MathOp): void {
